@@ -1,12 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabase';
 
 export default function ProfilePage() {
-  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +42,7 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans overflow-x-hidden relative selection:bg-red-900/50">
       
-      {/* BACKGROUND COVER (Support GIF) */}
+      {/* BACKGROUND COVER (Support GIF & Gambar) */}
       <div className="absolute top-0 w-full h-[32vh] overflow-hidden z-0 bg-gradient-to-b from-red-950/40 to-[#050505]">
         {user?.cover_url && (
           <img src={user.cover_url} alt="Cover" className="w-full h-full object-cover opacity-40 blur-[1px]" />
@@ -115,6 +113,7 @@ export default function ProfilePage() {
             <span className="text-gray-600 text-xs">▶</span>
           </Link>
 
+          {/* TOMBOL ADMIN CONTROL HANYA MUNCUL JIKA USER ADALAH ADMIN */}
           {user?.role === 'admin' && (
             <>
               <h3 className="text-[10px] font-bold text-red-600 mb-1 mt-6 uppercase tracking-wider ml-2">Admin Control</h3>
@@ -127,17 +126,22 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <nav className="fixed bottom-0 w-full max-w-xl left-1/2 -translate-x-1/2 bg-[#050505]/95 backdrop-blur-xl border-t border-white/5 flex justify-around items-center pt-3 pb-safe-area shadow-2xl z-50">
+      {/* NAVBAR BAWAH KEMBALI NORMAL DENGAN ICON */}
+      <nav className="fixed bottom-0 w-full max-w-xl left-1/2 -translate-x-1/2 bg-[#050505]/95 backdrop-blur-xl border-t border-white/5 flex justify-around items-center pt-3 pb-safe-area shadow-[0_-5px_30px_rgba(0,0,0,0.9)] z-50">
         <Link prefetch={false} href="/" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
+          <img src="/ic-home.jpg" alt="Home" className="w-5 h-5 mb-1 opacity-50 mix-blend-screen" />
           <span className="text-[10px] font-medium">Home</span>
         </Link>
         <Link prefetch={false} href="/explore" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
+          <img src="/ic-compas.jpg" alt="Explore" className="w-5 h-5 mb-1 opacity-50 mix-blend-screen" />
           <span className="text-[10px] font-medium">Explore</span>
         </Link>
         <Link prefetch={false} href="/library" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
+          <svg className="w-5 h-5 mb-1 opacity-50 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
           <span className="text-[10px] font-medium">Library</span>
         </Link>
-        <Link prefetch={false} href="/profile" className="flex flex-col items-center text-red-600 pb-2 transition-colors">
+        <Link prefetch={false} href="/profile" className="flex flex-col items-center text-red-800 pb-2 transition-colors">
+          <img src="/ic-profile.jpg" alt="Profile" className="w-5 h-5 mb-1 mix-blend-screen" style={{ filter: 'drop-shadow(0 0 5px rgba(127,29,29,0.5)) sepia(1) hue-rotate(320deg) saturate(500%) brightness(0.7)' }} />
           <span className="text-[10px] font-bold">Profile</span>
         </Link>
       </nav>
