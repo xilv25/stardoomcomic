@@ -1,4 +1,5 @@
 import ReaderUI from './ReaderUI';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function ChapterReaderPage({ 
   params 
@@ -63,6 +64,12 @@ export default async function ChapterReaderPage({
 
   const judulKomik = mangaData?.title || komik.replace(/-/g, ' ');
   const namaChapter = chapterData?.chapter?.name || chapter;
+  const coverUrl = mangaData?.thumbnail_url || '';
+
+  // =====================================================================
+  // OTOMATIS CATAT RIWAYAT BACA KE DATABASE SUPABASE
+  // (Catatan: Menggunakan cookies/session jika diperlukan, atau dicatat via Client UI)
+  // =====================================================================
 
   return (
     <ReaderUI 
