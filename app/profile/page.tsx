@@ -8,50 +8,41 @@ export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserData = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        // Ambil data profil terbaru langsung dari tabel profiles
-        const { data: profile, error } = await supabase
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        // Gunakan getUser() agar validasi token server-client lebih valid
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !authUser) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        const { data: profile } = await supabase
           .from('profiles')
           .select('username, role, avatar_url, cover_url, bio')
-          .eq('id', session.user.id)
+          .eq('id', authUser.id)
           .single();
 
-        if (profile) {
-          setUser({
-            email: session.user.email,
-            name: profile.username || session.user.email.split('@')[0],
-            role: profile.role || 'user',
-            avatar_url: profile.avatar_url || '/ic-profile.jpg',
-            cover_url: profile.cover_url || '',
-            bio: profile.bio || 'Belum ada bio.',
-            stats: { read: 0, bookmark: 0 }
-          });
-        }
-      } else {
-        setUser(null);
+        setUser({
+          email: authUser.email,
+          name: profile?.username || authUser.email?.split('@')[0],
+          role: profile?.role || 'user',
+          avatar_url: profile?.avatar_url || '/ic-profile.jpg',
+          cover_url: profile?.cover_url || '',
+          bio: profile?.bio || 'Belum ada bio.',
+          stats: { read: 0, bookmark: 0 }
+        });
+      } catch (err) {
+        console.error("Gagal memuat profil", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Gagal memuat profil", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUserData();
-
-    // Auto update jika terjadi perubahan sesi auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      fetchUserData();
-    });
-
-    return () => {
-      subscription.unsubscribe();
     };
+
+    fetchProfile();
   }, []);
 
   if (loading) {
@@ -61,7 +52,6 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans overflow-x-hidden relative selection:bg-red-900/50">
       
-      {/* BACKGROUND COVER (Support GIF & Gambar) */}
       <div className="absolute top-0 w-full h-[32vh] overflow-hidden z-0 bg-gradient-to-b from-red-950/40 to-[#050505]">
         {user?.cover_url && (
           <img src={user.cover_url} alt="Cover" className="w-full h-full object-cover opacity-40 blur-[1px]" />
@@ -132,7 +122,6 @@ export default function ProfilePage() {
             <span className="text-gray-600 text-xs">▶</span>
           </Link>
 
-          {/* TOMBOL ADMIN CONTROL - JIKA USER ADMIN AKAN MUNCUL OTOMATIS */}
           {user?.role === 'admin' && (
             <>
               <h3 className="text-[10px] font-bold text-red-600 mb-1 mt-6 uppercase tracking-wider ml-2">Admin Control</h3>
