@@ -51,6 +51,7 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans overflow-x-hidden relative selection:bg-red-900/50">
       
+      {/* BACKGROUND COVER (Support GIF & Gambar) */}
       <div className="absolute top-0 w-full h-[32vh] overflow-hidden z-0 bg-gradient-to-b from-red-950/40 to-[#050505]">
         {user?.cover_url && (
           <img src={user.cover_url} alt="Cover" className="w-full h-full object-cover opacity-40 blur-[1px]" />
