@@ -1,88 +1,77 @@
-'use client';
+"use client";
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-export default function SearchBar({ activeTab }: { activeTab: string }) {
-  const searchParams = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
+export default function SearchBar({ initialQuery, activeTab }: { initialQuery: string, activeTab: string }) {
   const [query, setQuery] = useState(initialQuery);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const [results, setResults] = useState<any[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+    const fetchSearch = async () => {
+      if (query.length < 2) {
+        setResults([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=${activeTab}`);
+        const recs = await res.json();
+        setResults(recs);
+      } catch (e) {
+        setResults([]);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    
+    const timeout = setTimeout(fetchSearch, 400);
+    return () => clearTimeout(timeout);
+  }, [query, activeTab]);
 
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (query.trim().length > 1) {
-        try {
-          const res = await fetch(`https://api.makota.asia/api/v1/manga/search?q=${encodeURIComponent(query)}&limit=5`);
-          const data = await res.json();
-          if (data.ok && data.data?.results) {
-            setSuggestions(data.data.results);
-            setIsOpen(true);
-          }
-        } catch (e) {
-          setSuggestions([]);
-        }
-      } else {
-        setSuggestions([]);
-        setIsOpen(false);
-      }
-    };
-
-    const timer = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
+    setShowDropdown(false);
+    if (query) {
       router.push(`/?type=${activeTab}&q=${encodeURIComponent(query)}&page=1`);
-      setIsOpen(false);
+    } else {
+      router.push(`/?type=${activeTab}&page=1`);
     }
   };
 
   return (
-    <div className="relative w-full" ref={searchRef}>
-      <form onSubmit={handleSearchSubmit}>
+    <div className="relative w-full z-[70]">
+      <form onSubmit={handleSubmit}>
         <input 
           type="text" 
-          value={query} 
-          onChange={(e) => setQuery(e.target.value)} 
-          placeholder="Cari komik, manhwa, manga..." 
-          className="w-full bg-[#18181b] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-red-500 shadow-inner"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setShowDropdown(true); }}
+          onFocus={() => { if (query.length >= 2) setShowDropdown(true); }}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+          placeholder="Cari manhwa, manga..." 
+          className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 transition-all shadow-inner"
         />
+        <svg className="absolute left-3.5 top-3 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
       </form>
-
-      {isOpen && suggestions.length > 0 && (
-        <div className="absolute left-0 right-0 mt-2 bg-[#121214] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-md">
-          {suggestions.map((item) => (
-            <div 
-              key={item.slug}
-              onClick={() => {
-                setQuery(item.title);
-                setIsOpen(false);
-                router.push(`/?type=${activeTab}&q=${encodeURIComponent(item.title)}&page=1`);
-              }}
-              className="flex items-center gap-3 p-2.5 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-none transition-colors"
+      
+      {showDropdown && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+          {results.map((manga: any) => (
+            <Link 
+              key={manga.slug} 
+              href={`/manga/${manga.slug}`} 
+              prefetch={false} // MATIKAN PREFETCH (Penting!)
+              onClick={() => setShowDropdown(false)} 
+              className="flex items-center gap-3 p-3 hover:bg-white/10 border-b border-white/5 last:border-0 transition-colors"
             >
-              <img src={item.thumbnail_url || item.cover} alt={item.title} className="w-10 h-12 object-cover rounded-lg" />
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-xs font-bold text-gray-200 truncate">{item.title}</span>
-                <span className="text-[10px] text-gray-400">{item.type || 'Manga'}</span>
+              <img src={manga.thumbnail_url} alt={manga.title} className="w-10 h-14 object-cover rounded shadow" loading="lazy" />
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-gray-200 line-clamp-1">{manga.title}</span>
+                <span className="text-[10px] text-red-400 capitalize mt-0.5">{manga.type} • {manga.latest_chapter}</span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
