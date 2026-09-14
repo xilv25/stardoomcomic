@@ -12,7 +12,7 @@ export default async function Home({ searchParams }) {
   let carouselMangas = [];
   let totalPages = 1;
   const ITEMS_PER_PAGE = 8;
-  const MAKOTA_TOKEN = "MASUKKAN_TOKEN_API_KAMU_DISINI";
+  const MAKOTA_TOKEN = "mki.eyJ1aWQiOjc5LCJ0eXBlIjoiYXBpIiwianRpIjoiZGNlYzc5ZjdkMmI3MWM5NmE5NGEzZjk4OTJiM2EzMWMiLCJpYXQiOjE3ODg3MjkwMTZ9.rD7LZleCzUAPZmFbQvOsSSzsDSsTjPPDDYzLzElomTM";
 
   try {
     const headers = { "Makota-API": MAKOTA_TOKEN };
