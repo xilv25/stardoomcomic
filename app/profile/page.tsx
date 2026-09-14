@@ -8,31 +8,50 @@ export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchUser = async () => {
+  const fetchUserData = async () => {
+    try {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        const { data: profile } = await supabase
+        // Ambil data profil terbaru langsung dari tabel profiles
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('username, role, avatar_url, cover_url, bio')
           .eq('id', session.user.id)
           .single();
 
-        setUser({
-          email: session.user.email,
-          name: profile?.username || session.user.email.split('@')[0],
-          role: profile?.role || "user",
-          avatar_url: profile?.avatar_url || "/ic-profile.jpg",
-          cover_url: profile?.cover_url || "",
-          bio: profile?.bio || "Belum ada bio.",
-          stats: { read: 0, bookmark: 0 }
-        });
+        if (profile) {
+          setUser({
+            email: session.user.email,
+            name: profile.username || session.user.email.split('@')[0],
+            role: profile.role || 'user',
+            avatar_url: profile.avatar_url || '/ic-profile.jpg',
+            cover_url: profile.cover_url || '',
+            bio: profile.bio || 'Belum ada bio.',
+            stats: { read: 0, bookmark: 0 }
+          });
+        }
+      } else {
+        setUser(null);
       }
+    } catch (err) {
+      console.error("Gagal memuat profil", err);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    fetchUser();
+  useEffect(() => {
+    fetchUserData();
+
+    // Auto update jika terjadi perubahan sesi auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchUserData();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -113,7 +132,7 @@ export default function ProfilePage() {
             <span className="text-gray-600 text-xs">▶</span>
           </Link>
 
-          {/* TOMBOL ADMIN CONTROL HANYA MUNCUL JIKA USER ADALAH ADMIN */}
+          {/* TOMBOL ADMIN CONTROL - JIKA USER ADMIN AKAN MUNCUL OTOMATIS */}
           {user?.role === 'admin' && (
             <>
               <h3 className="text-[10px] font-bold text-red-600 mb-1 mt-6 uppercase tracking-wider ml-2">Admin Control</h3>
@@ -126,7 +145,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* NAVBAR BAWAH KEMBALI NORMAL DENGAN ICON */}
       <nav className="fixed bottom-0 w-full max-w-xl left-1/2 -translate-x-1/2 bg-[#050505]/95 backdrop-blur-xl border-t border-white/5 flex justify-around items-center pt-3 pb-safe-area shadow-[0_-5px_30px_rgba(0,0,0,0.9)] z-50">
         <Link prefetch={false} href="/" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
           <img src="/ic-home.jpg" alt="Home" className="w-5 h-5 mb-1 opacity-50 mix-blend-screen" />
