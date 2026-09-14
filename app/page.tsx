@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import HomeHeader from './HomeHeader';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function Home({ 
   searchParams 
@@ -22,17 +23,27 @@ export default async function Home({
   const MAKOTA_TOKEN = process.env.MAKOTA_API_TOKEN as string;
 
   // =====================================================================
-  // AREA KONTROL ADMIN (Data ini nantinya diganti pakai fetch dari Database)
+  // AMBIL DATA KONTROL ADMIN DARI SUPABASE (Real-time Database)
   // =====================================================================
-  const adminAnnouncements = [
-    { id: 1, title: "Premium Sekarang Cuma Rp 12.500!!!", date: "16 November 2025" },
-    { id: 2, title: "Pengumuman Rekrutmen Translator & Typesetter", date: "03 August 2025" }
-  ];
+  let adminAnnouncements: any[] = [];
+  let adminSponsors: any[] = [];
 
-  const adminSponsors = [
-    { id: 1, title: "Sponsor 1", image: "https://api.dicebear.com/7.x/shapes/svg?seed=Ads1&backgroundColor=2a0a0a", link: "#" },
-    { id: 2, title: "Sponsor 2", image: "https://api.dicebear.com/7.x/shapes/svg?seed=Ads2&backgroundColor=1a1a1a", link: "#" }
-  ];
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+    
+    if (supabaseUrl && supabaseKey) {
+      const supabaseDb = createClient(supabaseUrl, supabaseKey);
+      
+      const { data: annData } = await supabaseDb.from('announcements').select('*').order('created_at', { ascending: false });
+      if (annData) adminAnnouncements = annData;
+
+      const { data: spsData } = await supabaseDb.from('sponsors').select('*');
+      if (spsData) adminSponsors = spsData;
+    }
+  } catch (e) {
+    // Fallback jika database belum merespons
+  }
   // =====================================================================
 
   try {
@@ -177,7 +188,7 @@ export default async function Home({
       {!isSearching && currentPage === 1 && (
         <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${carouselMangas.length > 0 ? 'mt-4' : 'mt-32'}`}>
           
-          {/* SECTION 2: PENGUMUMAN */}
+          {/* SECTION 2: PENGUMUMAN (Ditarik dari Database Supabase) */}
           {adminAnnouncements.length > 0 && (
             <section>
               <div className="flex justify-between items-end mb-3">
@@ -200,7 +211,7 @@ export default async function Home({
             </section>
           )}
 
-          {/* SECTION 3: SPONSOR IKLAN ADMIN */}
+          {/* SECTION 3: SPONSOR IKLAN ADMIN (Ditarik dari Database Supabase) */}
           {adminSponsors.length > 0 && (
             <section>
                <div className="flex justify-between items-end mb-3">
@@ -208,8 +219,8 @@ export default async function Home({
               </div>
               <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-3 pb-2 -mx-4 px-4">
                 {adminSponsors.map((iklan) => (
-                  <a key={iklan.id} href={iklan.link} target="_blank" rel="noreferrer" className="relative snap-center shrink-0 w-[280px] h-[120px] rounded-xl overflow-hidden border border-white/10 shadow-md">
-                    <img src={iklan.image} alt={iklan.title} className="w-full h-full object-cover" />
+                  <a key={iklan.id} href={iklan.link_url || iklan.link || '#'} target="_blank" rel="noreferrer" className="relative snap-center shrink-0 w-[280px] h-[120px] rounded-xl overflow-hidden border border-white/10 shadow-md">
+                    <img src={iklan.image_url || iklan.image} alt={iklan.title} className="w-full h-full object-cover" />
                     <div className="absolute top-1 right-1 bg-black/60 backdrop-blur border border-white/10 text-[8px] text-gray-400 px-1 rounded">Ad</div>
                   </a>
                 ))}
@@ -222,7 +233,6 @@ export default async function Home({
             <section>
               <div className="flex justify-between items-end mb-4">
                 <h2 className="text-lg font-bold text-gray-200">Rekomendasi</h2>
-                {/* Tombol Lihat Selengkapnya (Bukan tombol ^ lagi) */}
                 <Link href="/rekomendasi" className="text-[10px] text-red-700 font-bold hover:text-red-500 transition-colors">
                   Lihat Selengkapnya
                 </Link>
@@ -341,4 +351,4 @@ export default async function Home({
 
     </main>
   );
-                          }
+      }
