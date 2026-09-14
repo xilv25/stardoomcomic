@@ -1,9 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/utils/supabase';
 
 export default function SettingPage() {
   const router = useRouter();
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      alert('Gagal logout: ' + error.message);
+    } else {
+      router.push('/profile');
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-10 font-sans selection:bg-red-900/50">
@@ -49,7 +59,8 @@ export default function SettingPage() {
             <button className="text-left p-4 border-b border-white/5 hover:bg-white/5 transition-colors">
               <span className="text-sm font-bold text-gray-300">Syarat & Ketentuan</span>
             </button>
-            <button className="text-left p-4 hover:bg-white/5 transition-colors">
+            {/* TOMBOL KELUAR AKTIF */}
+            <button onClick={handleLogout} className="text-left p-4 hover:bg-white/5 transition-colors">
               <span className="text-sm font-bold text-red-500">Keluar (Logout)</span>
             </button>
           </div>
