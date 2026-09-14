@@ -2,21 +2,41 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../utils/supabase';// Pastikan path ini sesuai
-import Link from 'next/link';
+import { supabase } from '../utils/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Validasi Password Kuat: Min 8 char, ada Huruf Besar, Kecil, Angka, TANPA SIMBOL
+  const validatePassword = (pass: string) => {
+    const hasSymbol = /[^A-Za-z0-9]/.test(pass);
+    if (hasSymbol) return "Password tidak boleh mengandung simbol!";
+    if (pass.length < 8) return "Password minimal 8 karakter!";
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(pass)) {
+      return "Password harus gabungan Huruf Besar, Huruf Kecil, dan Angka!";
+    }
+    return null;
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+
+    if (!isLogin) {
+      const passError = validatePassword(password);
+      if (passError) {
+        setErrorMsg(passError);
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       if (isLogin) {
@@ -27,13 +47,10 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         
-        // Auto login setelah daftar (karena confirm email dimatikan)
         await supabase.auth.signInWithPassword({ email, password });
         
-        // Jadikan pendaftar pertama otomatis jadi Admin (Opsional, tapi mempermudahmu)
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // Update username default
           await supabase.from('profiles').update({ 
             username: email.split('@')[0] 
           }).eq('id', user.id);
@@ -50,44 +67,56 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-4 relative selection:bg-red-900/50">
       
-      {/* Background Glow */}
-      <div className="absolute top-0 w-full h-[40vh] bg-gradient-to-b from-red-900/20 to-transparent pointer-events-none"></div>
-
-      <button onClick={() => router.back()} className="absolute top-6 left-4 w-10 h-10 bg-[#111] border border-white/10 rounded-full flex items-center justify-center text-lg hover:bg-white/5 transition-colors z-10">
+      <button onClick={() => router.back()} className="absolute top-6 left-4 w-9 h-9 bg-[#111] border border-white/10 rounded-full flex items-center justify-center text-sm hover:bg-white/5 transition-colors z-10">
         ←
       </button>
 
       <div className="w-full max-w-sm z-10">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-red-900/80 border border-red-800/50 rounded-2xl mx-auto flex items-center justify-center font-extrabold text-white text-3xl shadow-[0_0_20px_rgba(127,29,29,0.5)] mb-4">S</div>
-          <h1 className="text-2xl font-extrabold tracking-widest">SDC<span className="text-red-900">.</span></h1>
-          <p className="text-gray-500 text-xs mt-1">Masuk untuk menyimpan komik favoritmu</p>
+        <div className="text-center mb-8">
+          <h1 className="text-xl font-extrabold tracking-widest uppercase">SDC<span className="text-red-700">.</span></h1>
+          <p className="text-gray-500 text-xs mt-1">Sistem Otentikasi Komik</p>
         </div>
 
-        <form onSubmit={handleAuth} className="bg-[#111]/80 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-2xl flex flex-col gap-4">
+        <form onSubmit={handleAuth} className="bg-[#111] border border-white/10 p-6 rounded-3xl shadow-2xl flex flex-col gap-4">
           
           <div className="flex bg-[#050505] rounded-xl p-1 border border-white/5 mb-2">
-            <button type="button" onClick={() => setIsLogin(true)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${isLogin ? 'bg-red-900/80 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}>Masuk</button>
-            <button type="button" onClick={() => setIsLogin(false)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!isLogin ? 'bg-red-900/80 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}>Daftar</button>
+            <button type="button" onClick={() => setIsLogin(true)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${isLogin ? 'bg-red-900 text-white' : 'text-gray-500'}`}>Masuk</button>
+            <button type="button" onClick={() => setIsLogin(false)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!isLogin ? 'bg-red-900 text-white' : 'text-gray-500'}`}>Daftar</button>
           </div>
 
-          {errorMsg && <div className="bg-red-900/20 border border-red-900/50 text-red-400 text-[11px] p-3 rounded-xl text-center font-bold">{errorMsg}</div>}
+          {errorMsg && <div className="bg-red-950/40 border border-red-900/50 text-red-400 text-[11px] p-3 rounded-xl text-center font-bold">{errorMsg}</div>}
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] text-gray-400 font-bold uppercase ml-1">Email</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-800 transition-colors" placeholder="nama@email.com" />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-red-800" placeholder="nama@email.com" />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 relative">
             <label className="text-[10px] text-gray-400 font-bold uppercase ml-1">Password</label>
-            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-800 transition-colors" placeholder="Minimal 6 karakter" minLength={6} />
+            <div className="relative">
+              <input 
+                type={showPassword ? "text" : "password"} 
+                required 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 pr-10 text-xs text-white focus:outline-none focus:border-red-800" 
+                placeholder="Min 8 char (Huruf & Angka)" 
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold hover:text-white"
+              >
+                {showPassword ? "Sembunyi" : "Lihat"}
+              </button>
+            </div>
           </div>
 
-          <button type="submit" disabled={loading} className="w-full bg-red-900 hover:bg-red-800 text-white font-extrabold py-3.5 rounded-xl mt-4 shadow-[0_0_15px_rgba(127,29,29,0.4)] border border-red-800 transition-all text-sm disabled:opacity-50">
-            {loading ? 'Memproses...' : (isLogin ? 'Masuk Sekarang' : 'Buat Akun')}
+          <button type="submit" disabled={loading} className="w-full bg-red-900 hover:bg-red-800 text-white font-extrabold py-3.5 rounded-xl mt-3 border border-red-800 transition-all text-xs disabled:opacity-50">
+            {loading ? 'Memproses...' : (isLogin ? 'Masuk' : 'Daftar Akun')}
           </button>
         </form>
       </div>
     </main>
   );
-            }
+}
