@@ -1,3 +1,5 @@
+import './globals.css';
+
 export const metadata = {
   title: 'StarDoom Comic',
   description: 'Platform Web Komik Ultra-Lite',
