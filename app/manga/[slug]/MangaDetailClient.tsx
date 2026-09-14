@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../utils/supabase'; // Path mundur 2 kali ke utils/supabase
+import { supabase } from '../../utils/supabase'; // Pastikan path ini benar (../../utils/supabase)
 import Link from 'next/link';
 
-export default function MangaDetailClient({ slug, manga, chapters }: { slug: string, manga: any, chapters: any[] }) {
+export default function MangaClient({ slug, manga, chapters }: { slug: string, manga: any, chapters: any[] }) {
   const router = useRouter();
+  
+  // State Supabase
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [lastHistory, setLastHistory] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+
+  // State Pagination Chapter
+  const [currentPage, setCurrentPage] = useState(1);
+  const chaptersPerPage = 25;
 
   useEffect(() => {
     const fetchUserStatus = async () => {
@@ -46,7 +52,7 @@ export default function MangaDetailClient({ slug, manga, chapters }: { slug: str
     fetchUserStatus();
   }, [slug]);
 
-  // Fungsi Toggle Bookmark
+  // Handle Bookmark
   const handleBookmarkToggle = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -72,79 +78,159 @@ export default function MangaDetailClient({ slug, manga, chapters }: { slug: str
     }
   };
 
+  // Logika Pagination Chapter
+  const totalPages = Math.ceil(chapters.length / chaptersPerPage);
+  const indexOfLastChapter = currentPage * chaptersPerPage;
+  const indexOfFirstChapter = indexOfLastChapter - chaptersPerPage;
+  const currentChapters = chapters.slice(indexOfFirstChapter, indexOfLastChapter);
+
+  // Array angka pagination (contoh: 1 2 3 4)
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(totalPages, startPage + 3);
+  if (endPage - startPage < 3) startPage = Math.max(1, endPage - 3);
+  const paginationRange = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+
+  // Penentuan Label Type & Warna
+  const mangaType = manga.type?.toLowerCase() || '';
+  const isManhwaOrManhua = mangaType.includes('manhwa') || mangaType.includes('manhua');
+  
+  // Penentuan Tombol Baca (Lanjut atau Ch 1)
+  const firstChapter = chapters.length > 0 ? chapters[chapters.length - 1] : null; 
+
   return (
-    <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans selection:bg-red-900/50">
+    <main className="min-h-screen bg-[#050505] text-white pb-24 font-sans selection:bg-red-900/50">
       
-      {/* HEADER & COVER */}
-      <div className="relative w-full h-[35vh]">
-        <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover opacity-30 blur-[2px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent"></div>
-        
-        <button onClick={() => router.back()} className="absolute top-4 left-4 w-9 h-9 bg-black/60 backdrop-blur border border-white/10 rounded-full flex items-center justify-center text-sm z-10 hover:bg-white/10 transition-colors">
-          ←
+      {/* HEADER NAVBAR */}
+      <div className="flex justify-between items-center p-4">
+        <button onClick={() => router.back()} className="w-10 h-10 bg-[#111] hover:bg-[#222] transition-colors rounded-full flex items-center justify-center border border-white/5 shadow-md">
+          <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        </button>
+        <button className="w-10 h-10 bg-[#111] hover:bg-[#222] transition-colors rounded-full flex items-center justify-center border border-white/5 shadow-md">
+          <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
         </button>
       </div>
 
-      <div className="px-4 max-w-xl mx-auto -mt-20 relative z-10 flex flex-col gap-6">
-        
-        <div className="flex gap-4 items-end">
-          <div className="w-28 aspect-[2/3] rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0 bg-[#111]">
-            <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover" />
-          </div>
-          <div className="flex flex-col gap-2 flex-1">
-            <span className="bg-red-900/80 border border-red-800 text-white text-[9px] font-extrabold px-2 py-0.5 rounded w-max">{manga.type || 'Manga'}</span>
-            <h1 className="text-lg font-extrabold text-white leading-snug">{manga.title}</h1>
-            
-            {/* TOMBOL BOOKMARK */}
-            <button 
-              onClick={handleBookmarkToggle} 
-              disabled={loadingUser}
-              className={`py-2 px-4 rounded-xl text-xs font-bold border transition-all ${isBookmarked ? 'bg-red-900 border-red-800 text-white shadow-[0_0_10px_rgba(127,29,29,0.5)]' : 'bg-[#111] border-white/10 text-gray-300 hover:bg-white/5'} disabled:opacity-50`}
-            >
-              {loadingUser ? 'Memuat...' : (isBookmarked ? '🔖 Tersimpan di Bookmark' : '+ Simpan Bookmark')}
-            </button>
+      {/* HERO / INFO KOMIK */}
+      <div className="px-4 flex gap-4 mt-2">
+        {/* Cover Kiri */}
+        <div className="relative w-[120px] shrink-0 aspect-[2/3] rounded-xl overflow-hidden shadow-xl bg-gray-900 border border-white/5">
+          <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover" />
+          {/* Tag Bintang Merah */}
+          <div className="absolute top-0 left-0 bg-red-600 rounded-br-xl px-2 py-1 shadow-md">
+            <span className="text-yellow-300 text-[10px]">⭐</span>
           </div>
         </div>
 
-        {/* TOMBOL LANJUTKAN MEMBACA */}
-        {lastHistory ? (
-          <Link href={`/baca/${slug}/${lastHistory.last_chapter_slug}`} className="bg-red-950/40 border border-red-900/50 p-4 rounded-2xl flex justify-between items-center hover:bg-red-900/30 transition-all shadow-lg">
-            <div className="flex flex-col">
-              <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">Lanjutkan Membaca</span>
-              <span className="text-sm font-extrabold text-gray-200 mt-0.5">{lastHistory.last_chapter_name}</span>
-            </div>
-            <span className="bg-red-900 text-white px-4 py-2 rounded-xl text-xs font-bold border border-red-800">Lanjut ▶</span>
-          </Link>
-        ) : chapters.length > 0 && (
-          <Link href={`/baca/${slug}/${chapters[chapters.length - 1].slug}`} className="bg-red-900 hover:bg-red-800 text-white p-4 rounded-2xl flex justify-between items-center transition-all shadow-[0_0_15px_rgba(127,29,29,0.3)] border border-red-800">
-            <div className="flex flex-col">
-              <span className="text-[10px] text-red-200 font-bold uppercase tracking-wider">Mulai Baca</span>
-              <span className="text-sm font-extrabold text-white mt-0.5">{chapters[chapters.length - 1].name}</span>
-            </div>
-            <span className="bg-black/30 px-4 py-2 rounded-xl text-xs font-bold">Mulai ▶</span>
-          </Link>
-        )}
+        {/* Info Kanan */}
+        <div className="flex flex-col justify-center gap-1.5 flex-1 overflow-hidden">
+          <h1 className="text-xl font-bold text-gray-100 leading-tight line-clamp-3">{manga.title}</h1>
+          <p className="text-sm text-gray-400 truncate">{manga.author || 'Unknown'}</p>
+          
+          <div className="flex flex-wrap gap-2 mt-1">
+            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${isManhwaOrManhua ? 'bg-red-900/80 text-red-100 border border-red-800' : 'bg-[#1a1a1a] text-gray-300 border border-white/10'}`}>
+              {manga.type || 'Manga'}
+            </span>
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-[#1a1a1a] text-gray-300 border border-white/10">
+              {manga.status || 'Ongoing'}
+            </span>
+          </div>
 
-        {/* SINOPSIS */}
-        <div className="bg-[#111] border border-white/5 p-4 rounded-2xl">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Sinopsis</h3>
-          <p className="text-xs text-gray-300 leading-relaxed">{manga.synopsis || "Tidak ada sinopsis."}</p>
-        </div>
-
-        {/* DAFTAR CHAPTER */}
-        <div className="bg-[#111] border border-white/5 p-4 rounded-2xl flex flex-col gap-2">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Daftar Chapter</h3>
-          <div className="flex flex-col gap-1.5 max-h-[400px] overflow-y-auto pr-1">
-            {chapters.map((ch: any) => (
-              <Link key={ch.slug} href={`/baca/${slug}/${ch.slug}`} className="flex justify-between items-center p-3 rounded-xl bg-white/5 hover:bg-red-900/20 border border-white/5 hover:border-red-900/40 text-xs transition-colors">
-                <span className="font-bold text-gray-300">{ch.name}</span>
-                <span className="text-[10px] text-gray-500">Baca</span>
-              </Link>
+          {/* Genres */}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {manga.genres?.slice(0, 4).map((genre: any, idx: number) => (
+              <span key={idx} className="text-[9px] text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-full">
+                {genre.name}
+              </span>
             ))}
           </div>
         </div>
-
       </div>
+
+      {/* ACTION BUTTONS */}
+      <div className="px-4 flex gap-3 mt-6">
+        {/* Tombol Baca */}
+        {lastHistory ? (
+          <Link href={`/baca/${slug}/${lastHistory.last_chapter_slug}`} className="flex-1 bg-[#a31a1a] hover:bg-red-800 transition-colors text-white font-bold rounded-xl flex items-center justify-center py-3.5 shadow-lg shadow-red-900/30">
+            Lanjut Baca ({lastHistory.last_chapter_name})
+          </Link>
+        ) : (
+          <Link href={firstChapter ? `/baca/${slug}/${firstChapter.slug}` : '#'} className="flex-1 bg-[#a31a1a] hover:bg-red-800 transition-colors text-white font-bold rounded-xl flex items-center justify-center py-3.5 shadow-lg shadow-red-900/30">
+            Mulai Baca ({firstChapter ? firstChapter.name : 'Ch. 1'})
+          </Link>
+        )}
+
+        {/* Tombol Bookmark */}
+        <button onClick={handleBookmarkToggle} disabled={loadingUser} className="w-14 h-14 bg-[#111] border border-white/5 hover:bg-white/5 transition-colors rounded-xl flex items-center justify-center shrink-0 shadow-md">
+          {loadingUser ? (
+            <span className="text-gray-500 text-xs">...</span>
+          ) : isBookmarked ? (
+            <svg className="w-6 h-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>
+          ) : (
+            <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+          )}
+        </button>
+      </div>
+
+      {/* SINOPSIS */}
+      <div className="px-4 mt-6">
+        <div className="bg-[#111] border border-white/5 p-4 rounded-2xl shadow-sm">
+          <h3 className="text-[13px] font-bold text-gray-100 mb-2">Sinopsis</h3>
+          <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-4">
+            {manga.synopsis || "Tidak ada sinopsis yang tersedia."}
+          </p>
+        </div>
+      </div>
+
+      {/* DAFTAR CHAPTER */}
+      <div className="px-4 mt-8 flex flex-col gap-3">
+        <div className="flex justify-between items-center mb-1">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-5 bg-red-600 rounded-full"></div>
+            <h2 className="text-base font-bold text-white">Daftar Chapter</h2>
+          </div>
+          <span className="text-[10px] text-gray-500">{chapters.length} Total</span>
+        </div>
+
+        {/* List Chapter Aktif */}
+        {currentChapters.map((ch: any) => (
+          <Link key={ch.slug} href={`/baca/${slug}/${ch.slug}`} className="bg-[#111] hover:bg-[#1a1a1a] border border-white/5 p-4 rounded-xl flex justify-between items-center transition-colors">
+            <span className="text-xs font-bold text-gray-200">{ch.name}</span>
+            <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
+          </Link>
+        ))}
+
+        {/* PAGINATION (1 2 3 4 < >) */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-6">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#111] border border-white/5 text-xs font-bold hover:bg-white/5 transition-all text-gray-400 disabled:opacity-30"
+            >
+              {"<"}
+            </button>
+            
+            {paginationRange.map(pageNum => (
+              <button 
+                key={pageNum}
+                onClick={() => setCurrentPage(pageNum)}
+                className={`w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === pageNum ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:bg-white/5'}`}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#111] border border-white/5 text-xs font-bold hover:bg-white/5 transition-all text-gray-400 disabled:opacity-30"
+            >
+              {">"}
+            </button>
+          </div>
+        )}
+      </div>
+
     </main>
   );
-        }
+}
