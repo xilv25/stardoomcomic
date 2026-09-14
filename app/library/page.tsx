@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '../utils/supabase';
 import Link from 'next/link';
 
-export default function LibraryPage() {
+// Pindahkan logika utama ke dalam sub-komponen
+function LibraryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get('tab') === 'bookmark' ? 'bookmark' : 'history';
@@ -49,12 +50,11 @@ export default function LibraryPage() {
   }, []);
 
   if (loading) {
-    return <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center font-bold text-red-900">Memuat Library...</main>;
+    return <div className="mt-20 text-center font-bold text-red-900">Memuat Library...</div>;
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans selection:bg-red-900/50">
-      
+    <>
       <header className="sticky top-0 z-50 px-4 py-4 flex justify-between items-center bg-[#050505]/90 backdrop-blur border-b border-white/5">
         <h1 className="text-sm font-extrabold tracking-widest text-white uppercase">Library</h1>
       </header>
@@ -127,8 +127,20 @@ export default function LibraryPage() {
             )}
           </>
         )}
-
       </div>
+    </>
+  );
+}
+
+// Halaman Utama dengan Pembungkus Suspense
+export default function LibraryPage() {
+  return (
+    <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans selection:bg-red-900/50">
+      
+      {/* Bungkus konten yang memanggil useSearchParams() dengan Suspense */}
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-red-900">Menyiapkan Library...</div>}>
+        <LibraryContent />
+      </Suspense>
 
       {/* NAVBAR BAWAH */}
       <nav className="fixed bottom-0 w-full max-w-xl left-1/2 -translate-x-1/2 bg-[#050505]/95 backdrop-blur-xl border-t border-white/5 flex justify-around items-center pt-3 pb-safe-area shadow-[0_-5px_30px_rgba(0,0,0,0.9)] z-50">
@@ -152,4 +164,4 @@ export default function LibraryPage() {
 
     </main>
   );
-            }
+}
