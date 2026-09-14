@@ -255,4 +255,5 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
 
     </main>
   );
-            }
+        }
+          
