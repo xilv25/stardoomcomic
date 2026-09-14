@@ -1,4 +1,4 @@
-import MangaDetailClient from './MangaDetailClient';
+import MangaClient from './MangaClient';
 
 export default async function MangaDetailPage({ 
   params 
@@ -16,7 +16,7 @@ export default async function MangaDetailPage({
   try {
     const res = await fetch(`https://api.makota.asia/api/v1/manga/${slug}`, {
       headers: { "Makota-API": MAKOTA_TOKEN },
-      next: { revalidate: 60 } // Cache selama 1 menit agar kencang
+      next: { revalidate: 60 } 
     });
     
     const data = await res.json();
@@ -40,5 +40,6 @@ export default async function MangaDetailPage({
     );
   }
 
-  return <MangaDetailClient slug={slug} manga={manga} chapters={chapters} />;
+  // Lempar datanya ke MangaClient yang sudah kita perbarui desainnya
+  return <MangaClient slug={slug} manga={manga} chapters={chapters} />;
 }
