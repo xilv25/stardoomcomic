@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase'; // Pastikan path ini sesuai
+import { supabase } from '../utils/supabase';// Pastikan path ini sesuai
 import Link from 'next/link';
 
 export default function LoginPage() {
