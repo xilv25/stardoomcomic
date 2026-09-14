@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/utils/supabase'; // Sesuaikan path utils supabase jika berbeda
 
 export default function ReaderUI({ 
   komik, chapter, chapterData, mangaData, prevCh, nextCh, judulKomik, namaChapter 
@@ -11,6 +12,32 @@ export default function ReaderUI({
   const [scrollSpeed, setScrollSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
+
+  // 0. Rekam Otomatis Riwayat Baca ke Database Supabase
+  useEffect(() => {
+    const saveReadingHistory = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('reading_history').upsert({
+            user_id: user.id,
+            manga_slug: komik,
+            manga_title: judulKomik,
+            cover_url: mangaData?.thumbnail_url || '',
+            last_chapter_slug: chapter,
+            last_chapter_name: namaChapter,
+            updated_at: new Date()
+          }, { onConflict: 'user_id, manga_slug' });
+        }
+      } catch (err) {
+        console.error("Gagal menyimpan riwayat baca:", err);
+      }
+    };
+
+    if (komik && chapter) {
+      saveReadingHistory();
+    }
+  }, [komik, chapter, judulKomik, namaChapter, mangaData]);
 
   // 1. Logika Hide Nav on Scroll & Deteksi Bawah
   useEffect(() => {
@@ -183,7 +210,6 @@ export default function ReaderUI({
             </button>
             
             <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll">
-              {/* Kalau play, ikon jadi merah */}
               <img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} />
             </button>
 
@@ -211,4 +237,5 @@ export default function ReaderUI({
       </div>
     </div>
   );
-}
+                 }
+        
