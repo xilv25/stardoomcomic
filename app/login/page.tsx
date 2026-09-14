@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Validasi Password Kuat: Min 8 char, ada Huruf Besar, Kecil, Angka, TANPA SIMBOL
   const validatePassword = (pass: string) => {
     const hasSymbol = /[^A-Za-z0-9]/.test(pass);
     if (hasSymbol) return "Password tidak boleh mengandung simbol!";
@@ -40,22 +39,27 @@ export default function LoginPage() {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.push('/profile');
+        if (data.session) {
+          router.push('/profile');
+          router.refresh();
+        }
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        if (signUpError) throw signUpError;
         
-        await supabase.auth.signInWithPassword({ email, password });
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+        if (loginError) throw loginError;
+
+        if (data.user) {
           await supabase.from('profiles').update({ 
             username: email.split('@')[0] 
-          }).eq('id', user.id);
+          }).eq('id', data.user.id);
         }
+        
         router.push('/profile');
+        router.refresh();
       }
     } catch (error: any) {
       setErrorMsg(error.message || 'Terjadi kesalahan');
