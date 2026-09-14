@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '../utils/supabase'; // Sesuaikan path utils supabase jika berbeda
+import { supabase } from '../../../../utils/supabase';// Sesuaikan path utils supabase jika berbeda
 
 export default function ReaderUI({ 
   komik, chapter, chapterData, mangaData, prevCh, nextCh, judulKomik, namaChapter 
