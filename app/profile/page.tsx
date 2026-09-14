@@ -11,7 +11,6 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        // Gunakan getUser() agar validasi token server-client lebih valid
         const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !authUser) {
@@ -122,11 +121,14 @@ export default function ProfilePage() {
             <span className="text-gray-600 text-xs">▶</span>
           </Link>
 
+          {/* JEMBATAN MENU ADMIN (Hanya muncul jika role user adalah 'admin') */}
           {user?.role === 'admin' && (
             <>
               <h3 className="text-[10px] font-bold text-red-600 mb-1 mt-6 uppercase tracking-wider ml-2">Admin Control</h3>
-              <Link href="/admin" className="flex items-center justify-between p-4 rounded-xl bg-red-950/20 border border-red-900/30 hover:bg-red-900/20 transition-colors">
-                <span className="text-xs font-bold text-red-400">Dashboard Kontrol</span>
+              <Link href="/admin" className="flex items-center justify-between p-4 rounded-xl bg-red-950/20 border border-red-900/30 hover:bg-red-900/20 transition-colors shadow-[0_0_15px_rgba(127,29,29,0.1)]">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-red-400">Dashboard Kontrol Admin</span>
+                </div>
                 <span className="text-red-800 text-xs">▶</span>
               </Link>
             </>
