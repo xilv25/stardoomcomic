@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/utils/supabase';
+import { supabase } from '../utils/supabase';
 
 export default function ProfilePage() {
   const router = useRouter();
