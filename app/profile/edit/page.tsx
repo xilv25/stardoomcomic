@@ -61,6 +61,7 @@ export default function EditProfilePage() {
     } else {
       alert('Profil berhasil diperbarui!');
       router.push('/profile');
+      router.refresh(); // Memaksa halaman profile mengambil data terbaru
     }
     setSaving(false);
   };
