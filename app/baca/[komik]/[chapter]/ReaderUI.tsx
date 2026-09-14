@@ -1,0 +1,214 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+export default function ReaderUI({ 
+  komik, chapter, chapterData, mangaData, prevCh, nextCh, judulKomik, namaChapter 
+}: any) {
+  const [navVisible, setNavVisible] = useState(true);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const [scrollSpeed, setScrollSpeed] = useState(1);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(false);
+
+  // 1. Logika Hide Nav on Scroll & Deteksi Bawah
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Deteksi apakah sudah sampai ujung bawah (batas toleransi 150px)
+      const scrolledToBottom = window.innerHeight + currentScrollY >= document.body.offsetHeight - 150;
+      setIsAtBottom(scrolledToBottom);
+
+      // Sembunyikan navigasi jika scroll ke bawah, tampilkan jika ke atas
+      if (currentScrollY > lastScrollY && currentScrollY > 100 && !scrolledToBottom) {
+        setNavVisible(false);
+        setShowSettings(false);
+      } else if (currentScrollY < lastScrollY) {
+        setNavVisible(true);
+      }
+      
+      lastScrollY = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // 2. Logika Auto Scroll
+  useEffect(() => {
+    let animationId: number;
+    const scroll = () => {
+      if (isAutoScrolling && !isAtBottom) {
+        window.scrollBy(0, scrollSpeed);
+        animationId = requestAnimationFrame(scroll);
+      } else if (isAtBottom && isAutoScrolling) {
+        setIsAutoScrolling(false); // Otomatis berhenti kalau mentok bawah
+        setNavVisible(true);
+      }
+    };
+
+    if (isAutoScrolling) {
+      animationId = requestAnimationFrame(scroll);
+      setNavVisible(false); // Otomatis Fullscreen saat play
+    }
+    
+    return () => cancelAnimationFrame(animationId);
+  }, [isAutoScrolling, scrollSpeed, isAtBottom]);
+
+  return (
+    <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
+      
+      {/* HEADER MELAYANG (TRANSPARAN) */}
+      <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
+        <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
+          <img src="/ic-arrow-left.jpg" alt="Back" className="w-5 h-5 mix-blend-screen opacity-80" />
+        </Link>
+        <div className="flex-1 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-4 flex items-center justify-center shadow-lg overflow-hidden">
+          <div className="flex gap-2 text-[10px] sm:text-xs font-bold items-center truncate">
+            <span className="text-gray-200 truncate">{judulKomik}</span>
+            <span className="text-gray-500">›</span>
+            <span className="text-red-400 whitespace-nowrap">{namaChapter}</span>
+          </div>
+        </div>
+        <Link href="/" className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
+          <img src="/ic-home.jpg" alt="Home" className="w-5 h-5 mix-blend-screen opacity-80" />
+        </Link>
+      </header>
+
+      {/* AREA GAMBAR (KLIK UNTUK FULLSCREEN) */}
+      <div 
+        className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
+        onClick={() => { setNavVisible(!navVisible); setShowSettings(false); }}
+      >
+        {chapterData.pages.map((pageUrl: string, index: number) => (
+          <img key={index} src={pageUrl} alt={`Halaman ${index + 1}`} className="w-full h-auto object-contain block m-0 p-0" loading="lazy" />
+        ))}
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 mt-8">
+        
+        {/* TOMBOL NEXT/PREV STATIS DI BAWAH (Hanya muncul jika mentok bawah) */}
+        {isAtBottom && (
+          <div className="flex justify-between items-center gap-4 py-6 border-b border-white/5 animate-fade-in">
+            {prevCh ? (
+              <Link href={`/baca/${komik}/${prevCh}`} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all">
+                <img src="/ic-chevron-left.jpg" alt="Prev" className="w-4 h-4 mix-blend-screen opacity-70" />
+                <span className="text-sm font-bold text-gray-300">Prev Chapter</span>
+              </Link>
+            ) : <div className="flex-1"></div>}
+
+            {nextCh ? (
+              <Link href={`/baca/${komik}/${nextCh}`} className="flex-1 bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all shadow-[0_0_20px_rgba(153,27,27,0.3)]">
+                <span className="text-sm font-bold text-white">Next Chapter</span>
+                <img src="/ic-chevron-right.jpg" alt="Next" className="w-4 h-4 mix-blend-screen opacity-90" />
+              </Link>
+            ) : (
+               <div className="flex-1 bg-white/5 py-3.5 rounded-xl text-center text-sm font-bold text-gray-600">Mentok Raw</div>
+            )}
+          </div>
+        )}
+
+        {/* KOLOM KOMENTAR & SPOILER */}
+        <div className="mt-8 pb-32">
+          <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-200">
+            💬 Diskusi Chapter
+          </h3>
+          
+          {/* Input Komentar Baru */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-8 focus-within:border-red-500/50 focus-within:bg-white/10 transition-all shadow-inner">
+            <textarea 
+              placeholder="Tulis teorimu di sini..." 
+              className="w-full bg-transparent text-sm text-white focus:outline-none resize-none min-h-[70px] placeholder:text-gray-600"
+            ></textarea>
+            
+            <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5">
+              <div className="flex gap-2">
+                <button className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400" title="Kirim Gambar">📷</button>
+                <button className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-red-400 flex items-center justify-center text-sm transition-all text-gray-400" title="Blok Teks untuk Sensor Spoiler">👁️‍🗨️</button>
+              </div>
+              <button className="px-5 py-2 bg-red-800 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">Kirim</button>
+            </div>
+          </div>
+          
+          {/* Daftar Komentar */}
+          <div className="flex flex-col gap-6">
+            <div className="flex gap-3">
+               <div className="w-9 h-9 rounded-full bg-white/10 shrink-0 overflow-hidden"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Reader2" alt="Avatar"/></div>
+               <div className="flex flex-col">
+                  <div className="flex gap-2 items-baseline">
+                     <span className="text-sm font-bold text-gray-200">PembacaSetia</span>
+                     <span className="text-[10px] text-gray-500">5 mnt lalu</span>
+                  </div>
+                  <p className="text-xs text-gray-300 mt-1 leading-relaxed">
+                    Wah seru bgt, btw... <span className="bg-white/10 text-transparent hover:text-white px-1.5 rounded blur-[4px] hover:blur-none transition-all duration-300 cursor-pointer border border-white/5 select-none hover:select-auto">itu nanti mati</span> beneran gak nyangka plot twistnya gini!
+                  </p>
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM NAVIGATION (MELAYANG & TRANSPARAN) */}
+      <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
+        
+        {/* Tombol Kiri: Prev Chapter (Hilang kalau mentok bawah) */}
+        <div className={`transition-opacity duration-300 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          {prevCh ? (
+            <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg">
+              <img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" />
+            </Link>
+          ) : <div className="w-12 h-12"></div>}
+        </div>
+
+        {/* PILL TENGAH (Menu & Auto Scroll) */}
+        <div className="flex-1 relative flex justify-center">
+          
+          {/* Pop-up Pengaturan Kecepatan */}
+          <div className={`absolute bottom-full mb-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl transition-all duration-300 origin-bottom ${showSettings ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
+            <p className="text-[10px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest">Speed Scroll: {scrollSpeed}x</p>
+            <input 
+              type="range" min="1" max="10" value={scrollSpeed} 
+              onChange={(e) => setScrollSpeed(Number(e.target.value))}
+              className="w-32 accent-red-600 cursor-pointer"
+            />
+          </div>
+
+          <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-full px-5 py-2.5 flex gap-4 sm:gap-5 items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+            <button onClick={() => setShowSettings(!showSettings)} className="hover:opacity-100 opacity-70 transition-opacity" title="Pengaturan Scroll">
+              <img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" />
+            </button>
+            
+            <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll">
+              {/* Kalau play, ikon jadi merah */}
+              <img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} />
+            </button>
+
+            <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark">
+              <img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" />
+            </button>
+            
+            <div className="w-[1px] h-5 bg-white/20"></div>
+            
+            <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik">
+              <img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" />
+            </Link>
+          </div>
+        </div>
+
+        {/* Tombol Kanan: Next Chapter (Hilang kalau mentok bawah) */}
+        <div className={`transition-opacity duration-300 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          {nextCh ? (
+            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]">
+              <img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" />
+            </Link>
+          ) : <div className="w-12 h-12"></div>}
+        </div>
+
+      </div>
+    </div>
+  );
+}
