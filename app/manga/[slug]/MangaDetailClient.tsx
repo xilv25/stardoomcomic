@@ -13,8 +13,9 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
   const [lastHistory, setLastHistory] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  // State Pagination Chapter
+  // State UI
   const [currentPage, setCurrentPage] = useState(1);
+  const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
   const chaptersPerPage = 25;
 
   useEffect(() => {
@@ -78,11 +79,18 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
     }
   };
 
-  // Logika Pagination Chapter
-  const totalPages = Math.ceil(chapters.length / chaptersPerPage);
+  // 1. URUTKAN CHAPTER (Terbaru di Atas / Descending)
+  const sortedChapters = [...chapters].sort((a, b) => {
+    const numA = parseFloat(a.name.match(/\d+(\.\d+)?/)?.[0] || "0");
+    const numB = parseFloat(b.name.match(/\d+(\.\d+)?/)?.[0] || "0");
+    return numB - numA; // Terbesar (terbaru) di atas
+  });
+
+  // 2. PAGINATION CHAPTER
+  const totalPages = Math.ceil(sortedChapters.length / chaptersPerPage);
   const indexOfLastChapter = currentPage * chaptersPerPage;
   const indexOfFirstChapter = indexOfLastChapter - chaptersPerPage;
-  const currentChapters = chapters.slice(indexOfFirstChapter, indexOfLastChapter);
+  const currentChapters = sortedChapters.slice(indexOfFirstChapter, indexOfLastChapter);
 
   // Array angka pagination (contoh: 1 2 3 4)
   let startPage = Math.max(1, currentPage - 2);
@@ -90,12 +98,12 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
   if (endPage - startPage < 3) startPage = Math.max(1, endPage - 3);
   const paginationRange = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
 
-  // Penentuan Label Type & Warna
+  // Penentuan Label Type & Warna (Manhwa/Manhua pakai warna merah)
   const mangaType = manga.type?.toLowerCase() || '';
   const isManhwaOrManhua = mangaType.includes('manhwa') || mangaType.includes('manhua');
   
-  // Penentuan Tombol Baca (Lanjut atau Ch 1)
-  const firstChapter = chapters.length > 0 ? chapters[chapters.length - 1] : null; 
+  // Chapter 1 (Karena array dibalik, ch 1 ada di index paling akhir)
+  const firstChapter = sortedChapters.length > 0 ? sortedChapters[sortedChapters.length - 1] : null; 
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-24 font-sans selection:bg-red-900/50">
@@ -148,10 +156,10 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
 
       {/* ACTION BUTTONS */}
       <div className="px-4 flex gap-3 mt-6">
-        {/* Tombol Baca */}
+        {/* Tombol Baca / Lanjutkan */}
         {lastHistory ? (
           <Link href={`/baca/${slug}/${lastHistory.last_chapter_slug}`} className="flex-1 bg-[#a31a1a] hover:bg-red-800 transition-colors text-white font-bold rounded-xl flex items-center justify-center py-3.5 shadow-lg shadow-red-900/30">
-            Lanjut Baca ({lastHistory.last_chapter_name})
+            Lanjutkan Membaca ({lastHistory.last_chapter_name})
           </Link>
         ) : (
           <Link href={firstChapter ? `/baca/${slug}/${firstChapter.slug}` : '#'} className="flex-1 bg-[#a31a1a] hover:bg-red-800 transition-colors text-white font-bold rounded-xl flex items-center justify-center py-3.5 shadow-lg shadow-red-900/30">
@@ -164,9 +172,9 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
           {loadingUser ? (
             <span className="text-gray-500 text-xs">...</span>
           ) : isBookmarked ? (
-            <svg className="w-6 h-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>
+            <img src="/ic-bookmark.jpg" alt="Saved" className="w-6 h-6 mix-blend-screen filter sepia hue-rotate-[320deg] saturate-[500%] drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
           ) : (
-            <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+            <img src="/ic-bookmark.jpg" alt="Bookmark" className="w-6 h-6 mix-blend-screen opacity-50" />
           )}
         </button>
       </div>
@@ -175,9 +183,17 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
       <div className="px-4 mt-6">
         <div className="bg-[#111] border border-white/5 p-4 rounded-2xl shadow-sm">
           <h3 className="text-[13px] font-bold text-gray-100 mb-2">Sinopsis</h3>
-          <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-4">
+          <p className={`text-[11px] text-gray-400 leading-relaxed ${isSynopsisExpanded ? '' : 'line-clamp-4'}`}>
             {manga.synopsis || "Tidak ada sinopsis yang tersedia."}
           </p>
+          {manga.synopsis && manga.synopsis.length > 150 && (
+            <button 
+              onClick={() => setIsSynopsisExpanded(!isSynopsisExpanded)} 
+              className="text-[11px] font-bold text-red-600 mt-2 hover:text-red-500 transition-colors"
+            >
+              {isSynopsisExpanded ? 'Tutup' : 'Baca Selengkapnya'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -192,12 +208,18 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
         </div>
 
         {/* List Chapter Aktif */}
-        {currentChapters.map((ch: any) => (
-          <Link key={ch.slug} href={`/baca/${slug}/${ch.slug}`} className="bg-[#111] hover:bg-[#1a1a1a] border border-white/5 p-4 rounded-xl flex justify-between items-center transition-colors">
-            <span className="text-xs font-bold text-gray-200">{ch.name}</span>
-            <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
-          </Link>
-        ))}
+        {currentChapters.map((ch: any) => {
+          const isLastRead = lastHistory?.last_chapter_slug === ch.slug;
+          return (
+            <Link key={ch.slug} href={`/baca/${slug}/${ch.slug}`} className={`border p-4 rounded-xl flex justify-between items-center transition-colors ${isLastRead ? 'bg-red-950/20 border-red-900/50 hover:bg-red-900/30' : 'bg-[#111] hover:bg-[#1a1a1a] border-white/5'}`}>
+              <div className="flex flex-col">
+                <span className={`text-xs font-bold ${isLastRead ? 'text-red-400' : 'text-gray-200'}`}>{ch.name}</span>
+                {isLastRead && <span className="text-[9px] text-red-500 font-bold mt-1">🔖 Terakhir dibaca</span>}
+              </div>
+              <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
+            </Link>
+          )
+        })}
 
         {/* PAGINATION (1 2 3 4 < >) */}
         {totalPages > 1 && (
@@ -233,4 +255,4 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
 
     </main>
   );
-}
+            }
