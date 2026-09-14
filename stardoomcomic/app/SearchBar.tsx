@@ -3,11 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-export default function SearchBar({ initialQuery, activeTab }) {
+export default function SearchBar({ initialQuery, activeTab }: { initialQuery: string; activeTab: string }) {
   const [query, setQuery] = useState(initialQuery);
   const router = useRouter();
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
       router.push(`/?type=${activeTab}&q=${encodeURIComponent(query)}&page=1`);
