@@ -1,4 +1,4 @@
-import Link from 'next/link';
+    import Link from 'next/link';
 import SearchBar from './SearchBar';
 
 export default async function Home({ 
@@ -14,13 +14,10 @@ export default async function Home({
 
   let daftarKomik: any[] = [];
   let carouselMangas: any[] = [];
-  let favMangas: any[] = [];
-  let apiError = false;
-  let totalPages = 1;
-  const ITEMS_PER_PAGE = 8;
+  const MAKOTA_TOKEN = "mki.eyJ1aWQiOjc5LCJ0eXBlIjoiYXBpIiwianRpIjoiZGNlYzc5ZjdkMmI3MWM5NmE5NGEzZjk4OTJiM2EzMWMiLCJpYXQiOjE3ODg3MjkwMTZ9.rD7LZleCzUAPZmFbQvOsSSzsDSsTjPPDDYzLzElomTM";
 
   try {
-    const headers = { "Makota-API": process.env.MAKOTA_API_TOKEN as string };
+    const headers = { "Makota-API": MAKOTA_TOKEN };
     
     if (!isSearching && currentPage === 1) {
       const resPopular = await fetch(`https://api.makota.asia/api/v1/manga/popular?limit=8`, {
@@ -29,13 +26,12 @@ export default async function Home({
       const popData = await resPopular.json();
       if (popData.ok && popData.data?.results) {
         carouselMangas = popData.data.results.slice(0, 5);
-        favMangas = popData.data.results.slice(5, 8);
       }
     }
 
     const urlParams = new URLSearchParams();
     if (isSearching) {
-      urlParams.append('limit', ITEMS_PER_PAGE.toString());
+      urlParams.append('limit', '8');
       urlParams.append('page', currentPage.toString());
       if (activeTab !== 'semua') urlParams.append('type', activeTab);
       urlParams.append('q', searchQuery);
@@ -44,10 +40,8 @@ export default async function Home({
         headers, cache: 'no-store' 
       });
       const listData = await resList.json();
-
       if (listData.ok && listData.data?.results) {
         daftarKomik = listData.data.results;
-        totalPages = Math.ceil((listData.data.total || 0) / ITEMS_PER_PAGE);
       }
     } else {
       urlParams.append('limit', '30');
@@ -57,15 +51,12 @@ export default async function Home({
         headers, next: { revalidate: 60 } 
       });
       const listData = await resList.json();
-
       if (listData.ok && listData.data?.results) {
-        const allMangas = listData.data.results;
-        totalPages = Math.ceil(allMangas.length / ITEMS_PER_PAGE);
-        daftarKomik = allMangas.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+        daftarKomik = listData.data.results.slice((currentPage - 1) * 8, currentPage * 8);
       }
     }
   } catch (error) {
-    apiError = true;
+    // Abaikan error jaringan saat build
   }
 
   return (
@@ -76,16 +67,6 @@ export default async function Home({
       </header>
 
       <div className="px-4 mt-5 max-w-xl mx-auto">
-        {carouselMangas.length > 0 && (
-          <div className="flex overflow-x-auto gap-4 pb-2">
-            {carouselMangas.map((manga) => (
-              <div key={manga.slug} className="shrink-0 w-[200px] h-[120px] rounded-xl overflow-hidden bg-[#18181b]">
-                <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover" />
-              </div>
-            ))}
-          </div>
-        )}
-
         <div className="grid grid-cols-2 gap-3 mt-6">
           {daftarKomik.map((komik, idx) => (
             <div key={idx} className="flex flex-col gap-2">
@@ -99,4 +80,4 @@ export default async function Home({
       </div>
     </main>
   );
-          }
+}
