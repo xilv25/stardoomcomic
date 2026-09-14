@@ -23,7 +23,7 @@ export default async function Home({
   const MAKOTA_TOKEN = process.env.MAKOTA_API_TOKEN as string;
 
   // =====================================================================
-  // AMBIL DATA KONTROL ADMIN DARI SUPABASE (Real-time Database)
+  // AMBIL DATA KONTROL ADMIN DARI SUPABASE (Dibatasi 2 untuk Pengumuman)
   // =====================================================================
   let adminAnnouncements: any[] = [];
   let adminSponsors: any[] = [];
@@ -35,7 +35,12 @@ export default async function Home({
     if (supabaseUrl && supabaseKey) {
       const supabaseDb = createClient(supabaseUrl, supabaseKey);
       
-      const { data: annData } = await supabaseDb.from('announcements').select('*').order('created_at', { ascending: false });
+      // Ambil maksimal 2 pengumuman terbaru saja supaya tidak menumpuk di homepage
+      const { data: annData } = await supabaseDb
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(2);
       if (annData) adminAnnouncements = annData;
 
       const { data: spsData } = await supabaseDb.from('sponsors').select('*');
@@ -81,8 +86,9 @@ export default async function Home({
         totalPages = Math.ceil((listData.data.total || 0) / ITEMS_PER_PAGE);
       }
     } else {
-      urlParams.append('limit', '50');
+      urlParams.append('limit', '20');
       if (activeTab !== 'semua') urlParams.append('type', activeTab);
+      urlParams.append('page', currentPage.toString());
 
       const resList = await fetch(`https://api.makota.asia/api/v1/manga/latest?${urlParams.toString()}`, {
         headers, next: { revalidate: 60 } 
@@ -90,64 +96,32 @@ export default async function Home({
       const listData = await resList.json();
 
       if (listData.ok && listData.data?.results) {
-        const allMangas = listData.data.results;
-        totalPages = Math.ceil(allMangas.length / ITEMS_PER_PAGE);
-        mangas = allMangas.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+        mangas = listData.data.results;
+        totalPages = 10;
       }
     }
 
-    // 3. AMBIL DETAIL CHAPTER
-    const detailedMangas = await Promise.all(
-      mangas.map(async (manga: any) => {
-        try {
-          const resDetail = await fetch(`https://api.makota.asia/api/v1/manga/${manga.slug}`, {
-            headers, next: { revalidate: 60 }
-          });
-          const detailData = await resDetail.json();
-          
-          if (detailData.ok && detailData.data?.manga) {
-            const detail = detailData.data.manga;
-            let flag = "🇯🇵"; 
-            if (detail.type?.toLowerCase() === "manhwa") flag = "🇰🇷";
-            if (detail.type?.toLowerCase() === "manhua") flag = "🇨🇳";
-            
-            let chapterList = detail.chapters ? [...detail.chapters] : [];
-            if (chapterList.length > 0) {
-              const firstChNum = parseInt(chapterList[0]?.name.match(/\d+/)?.[0] || "0");
-              const lastChNum = parseInt(chapterList[chapterList.length - 1]?.name.match(/\d+/)?.[0] || "0");
-              if (firstChNum < lastChNum) chapterList.reverse();
-            }
+    daftarKomik = mangas.map((manga: any) => {
+      let flag = "🇯🇵"; 
+      const type = manga.type?.toLowerCase() || 'manga';
+      if (type.includes("manhwa")) flag = "🇰🇷";
+      if (type.includes("manhua")) flag = "🇨🇳";
 
-            return {
-              title: detail.title || manga.title,
-              slug: detail.slug || manga.slug,
-              cover: detail.thumbnail_url || manga.thumbnail_url,
-              type: detail.type || manga.type,
-              flag: flag,
-              isUp: true,
-              chapters: chapterList.slice(0, 3).map((ch: any) => ({
-                name: ch.name,
-                slug: ch.slug,
-                time: "Baru" 
-              }))
-            };
-          }
-        } catch (e) {
-          // Skip if error
-        }
-        
-        return {
-          title: manga.title,
-          slug: manga.slug,
-          cover: manga.thumbnail_url || manga.cover,
-          type: manga.type || 'Manga',
-          flag: manga.type?.toLowerCase() === "manhwa" ? "🇰🇷" : manga.type?.toLowerCase() === "manhua" ? "🇨🇳" : "🇯🇵",
-          isUp: false,
-          chapters: []
-        };
-      })
-    );
-    daftarKomik = detailedMangas.filter(Boolean);
+      return {
+        title: manga.title,
+        slug: manga.slug,
+        cover: manga.thumbnail_url || manga.cover,
+        type: manga.type || 'Manga',
+        flag: flag,
+        isUp: true,
+        chapters: manga.chapters ? manga.chapters.slice(0, 2).map((ch: any) => ({
+          name: ch.name,
+          slug: ch.slug,
+          time: "Baru"
+        })) : []
+      };
+    });
+
   } catch (error) {
     apiError = true;
   }
@@ -188,7 +162,7 @@ export default async function Home({
       {!isSearching && currentPage === 1 && (
         <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${carouselMangas.length > 0 ? 'mt-4' : 'mt-32'}`}>
           
-          {/* SECTION 2: PENGUMUMAN (Ditarik dari Database Supabase) */}
+          {/* SECTION 2: PENGUMUMAN (Dibatasi Maksimal 2) */}
           {adminAnnouncements.length > 0 && (
             <section>
               <div className="flex justify-between items-end mb-3">
@@ -211,7 +185,7 @@ export default async function Home({
             </section>
           )}
 
-          {/* SECTION 3: SPONSOR IKLAN ADMIN (Ditarik dari Database Supabase) */}
+          {/* SECTION 3: SPONSOR IKLAN ADMIN */}
           {adminSponsors.length > 0 && (
             <section>
                <div className="flex justify-between items-end mb-3">
@@ -240,8 +214,8 @@ export default async function Home({
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {favMangas.map((manga, idx) => {
                   let flag = "🇯🇵"; 
-                  if (manga.type.toLowerCase() === "manhwa") flag = "🇰🇷";
-                  if (manga.type.toLowerCase() === "manhua") flag = "🇨🇳";
+                  if (manga.type?.toLowerCase().includes("manhwa")) flag = "🇰🇷";
+                  if (manga.type?.toLowerCase().includes("manhua")) flag = "🇨🇳";
 
                   return (
                     <Link prefetch={false} key={manga.slug} href={`/manga/${manga.slug}`} className="flex flex-col gap-1.5 group">
@@ -351,4 +325,4 @@ export default async function Home({
 
     </main>
   );
-      }
+        }
