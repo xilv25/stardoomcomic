@@ -13,22 +13,21 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State Komentar yang sudah DIBERSIHKAN dari tag generics agar Vercel tidak bingung
+  // State Komentar
   const [commentText, setCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState(null as any);
-  const [commentsList, setCommentsList] = useState([] as any[]);
-  const [showReplies, setShowReplies] = useState({} as any);
-  const [openMenuId, setOpenMenuId] = useState(null as any);
-  const [currentUser, setCurrentUser] = useState(null as any);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [commentsList, setCommentsList] = useState<any[]>([]);
+  const [showReplies, setShowReplies] = useState<any>({});
+  const [openMenuId, setOpenMenuId] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  const textareaRef = useRef(null as any);
-  const fileInputRef = useRef(null as any);
+  const textareaRef = useRef<any>(null);
+  const fileInputRef = useRef<any>(null);
 
-  // 0. Ambil Session User & Load Komentar Asli
   useEffect(() => {
     let isMounted = true;
 
@@ -51,7 +50,6 @@ export default function ReaderUI({
             });
           }
 
-          // Simpan Riwayat
           await supabase.from('reading_history').upsert({
             user_id: session.user.id,
             manga_slug: komik,
@@ -63,7 +61,6 @@ export default function ReaderUI({
           }, { onConflict: 'user_id, manga_slug' });
         }
 
-        // Fetch Komentar
         const { data: comments, error } = await supabase
           .from('chapter_comments')
           .select('*')
@@ -85,7 +82,6 @@ export default function ReaderUI({
     return () => { isMounted = false; };
   }, [komik, chapter, judulKomik, namaChapter, mangaData]);
   
-  // 1. Logika Hide Nav on Scroll & Deteksi Bawah
   useEffect(() => {
     let lastScrollY = window.scrollY;
     
@@ -108,7 +104,6 @@ export default function ReaderUI({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 2. Logika Auto Scroll (Bisa Berhenti Manual)
   useEffect(() => {
     let animationId: number;
     const scroll = () => {
@@ -236,8 +231,11 @@ export default function ReaderUI({
     setShowReplies((prev: any) => ({ ...prev, [parentId]: !prev[parentId] }));
   };
 
+  // MENGGUNAKAN NEW REGEXP AGAR COMPILER VERCEL TIDAK ERROR
   const renderImages = (text: string, keyPrefix: string) => {
-    const imgParts = text.split(/(\[img\].*?\[\/img\])/g);
+    const imgRegex = new RegExp('(\\[img\\][\\s\\S]*?\\[/img\\])', 'g');
+    const imgParts = text.split(imgRegex);
+    
     return imgParts.map((part, i) => {
       if (part.startsWith('[img]') && part.endsWith('[/img]')) {
         const url = part.replace('[img]', '').replace('[/img]', '');
@@ -248,7 +246,9 @@ export default function ReaderUI({
   };
 
   const renderFormattedContent = (text: string) => {
-    const spoilerParts = text.split(/(\[spoiler\][\s\S]*?\[\/spoiler\])/g);
+    const spoilerRegex = new RegExp('(\\[spoiler\\][\\s\\S]*?\\[/spoiler\\])', 'g');
+    const spoilerParts = text.split(spoilerRegex);
+    
     return spoilerParts.map((part, i) => {
       if (part.startsWith('[spoiler]') && part.endsWith('[/spoiler]')) {
         const actualText = part.replace('[spoiler]', '').replace('[/spoiler]', '');
@@ -264,7 +264,7 @@ export default function ReaderUI({
     });
   };
 
-  const mainComments = commentsList.filter(c => !c.parent_id);
+  const mainComments = commentsList.filter((c: any) => !c.parent_id);
 
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
@@ -384,18 +384,18 @@ export default function ReaderUI({
                              <span className="text-[10px] text-gray-500 ml-auto shrink-0">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                              
                              <div className="relative z-[65]">
-                                     <button onClick={() => setOpenMenuId(openMenuId === reply.id ? null : reply.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
-                                     {openMenuId === reply.id && (
-                                       <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
-                                         <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
-                                         {(currentUser?.id === reply.user_id || currentUser?.role === 'admin') && (
-                                           <button onClick={() => handleDeleteComment(reply.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
-                                         )}
-                                       </div>
-                                     )}
-                                   </div>
-                                </div>
-                                <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
+                               <button onClick={() => setOpenMenuId(openMenuId === cmt.id ? null : cmt.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
+                               {openMenuId === cmt.id && (
+                                 <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
+                                   <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
+                                   {(currentUser?.id === cmt.user_id || currentUser?.role === 'admin') && (
+                                     <button onClick={() => handleDeleteComment(cmt.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
+                                   )}
+                                 </div>
+                               )}
+                             </div>
+                          </div>
+                         <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
                                   {renderFormattedContent(reply.content)}
                                 </div>
                                 <div className="mt-1 flex justify-end">
