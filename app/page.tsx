@@ -151,7 +151,7 @@ export default async function Home({
       <DonationPopup />
       
       {/* HEADER DENGAN TOKEN API MAKO */}
-      <HomeHeader activeTab={activeTab} apiToken={MAKOTA_TOKEN} />
+      <HomeHeader activeTab={activeTab} />
 
       {!isSearching && currentPage === 1 && carouselMangas.length > 0 && (
         <section className="relative w-full h-[55vh] sm:h-[60vh]">
