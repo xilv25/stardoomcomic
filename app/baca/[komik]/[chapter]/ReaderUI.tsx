@@ -15,7 +15,7 @@ export default function ReaderUI({
 
   // State Komentar, Reply, & Upload Gambar Device
   const [commentText, setCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<any>(null); // Menyimpan data komentar yang sedang dibalas
+  const [replyingTo, setReplyingTo] = useState<any>(null);
   const [commentsList, setCommentsList] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(true);
@@ -156,7 +156,7 @@ export default function ReaderUI({
     setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
   };
 
-  // Upload Gambar dari Device User ke Supabase Storage
+  // Upload Gambar dari Device User ke Supabase Storage (FIXED SYNTAX)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -169,7 +169,7 @@ export default function ReaderUI({
     setUploadingImage(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36.substring(2)}_${Date.now()}.${fileExt}`;
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
       const filePath = `comments/${fileName}`;
 
       // Upload ke bucket Supabase Storage 'comment-images'
@@ -301,7 +301,7 @@ export default function ReaderUI({
         </button>
       </div>
 
-      {/* AREA GAMBAR (Render Urut dari Atas ke Bawah secara Optimal) */}
+      {/* AREA GAMBAR */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); }}
@@ -312,14 +312,14 @@ export default function ReaderUI({
             src={pageUrl} 
             alt={`Halaman ${index + 1}`} 
             className="w-full h-auto object-contain block m-0 p-0" 
-            loading={index < 3 ? "eager" : "lazy"} // Halaman pertama langsung diload cepat, sisanya menyusul
+            loading={index < 3 ? "eager" : "lazy"} 
           />
         ))}
       </div>
 
       <div className="max-w-2xl mx-auto px-4 mt-8">
         
-        {/* TOMBOL NEXT/PREV PERMANEN DI BAWAH (Selalu tampil mulus tanpa getar) */}
+        {/* TOMBOL NEXT/PREV PERMANEN DI BAWAH */}
         <div className="flex justify-between items-center gap-4 py-6 border-b border-white/5">
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all">
@@ -338,7 +338,7 @@ export default function ReaderUI({
           )}
         </div>
 
-        {/* KOLOM KOMENTAR ASLI DENGAN FITUR REPLY & UPLOAD FILE */}
+        {/* KOLOM KOMENTAR */}
         <div className="mt-8 pb-36">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-200">
             💬 Diskusi Chapter ({commentsList.length})
@@ -346,7 +346,6 @@ export default function ReaderUI({
           
           <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-8 focus-within:border-red-500/50 focus-within:bg-white/10 transition-all shadow-inner relative">
             
-            {/* Banner Indikator Sedang Membalas Komentar */}
             {replyingTo && (
               <div className="flex justify-between items-center bg-black/40 px-3 py-1.5 rounded-lg mb-2 border border-white/10 text-xs text-gray-300">
                 <span>Membalas <strong className="text-red-400">@{replyingTo.username}</strong></span>
@@ -365,8 +364,6 @@ export default function ReaderUI({
             
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5">
               <div className="flex gap-2 items-center">
-                
-                {/* INPUT FILE TERSEMBUNYI UNTUK UPLOAD GAMBAR DEVICE */}
                 <input 
                   type="file" 
                   ref={fileInputRef} 
@@ -379,7 +376,7 @@ export default function ReaderUI({
                   onClick={() => fileInputRef.current?.click()} 
                   disabled={!currentUser || uploadingImage} 
                   className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" 
-                  title="Upload Gambar dari Perangkat"
+                  title="Upload Gambar"
                 >
                   {uploadingImage ? '⏳' : '📷'}
                 </button>
@@ -404,7 +401,7 @@ export default function ReaderUI({
             </div>
           </div>
           
-          {/* DAFTAR KOMENTAR REAL-TIME */}
+          {/* DAFTAR KOMENTAR */}
           <div className="flex flex-col gap-6">
             {loadingComments ? (
               <div className="text-center text-xs text-gray-500 py-6">Memuat diskusi...</div>
@@ -440,7 +437,6 @@ export default function ReaderUI({
                         {renderFormattedContent(cmt.content)}
                       </div>
 
-                      {/* TOMBOL REPLY DI SETIAP KOMENTAR */}
                       <div className="mt-2 flex justify-end">
                         <button 
                           onClick={() => {
@@ -460,10 +456,9 @@ export default function ReaderUI({
         </div>
       </div>
 
-      {/* BOTTOM NAVIGATION (Hanya menyisakan tombol bulat yang otomatis hilang 0.1 detik pas nyampe bawah gambar) */}
+      {/* BOTTOM NAVIGATION (Tombol bulat kanan-kiri yang menghilang otomatis saat pas mentok bawah gambar) */}
       <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
         
-        {/* Tombol Kiri (Prev) */}
         <div className={`transition-opacity duration-100 ${isAtBottom ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`}>
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg">
@@ -472,7 +467,6 @@ export default function ReaderUI({
           ) : <div className="w-12 h-12"></div>}
         </div>
 
-        {/* Pill Tengah */}
         <div className="flex-1 relative flex justify-center">
           <div className={`absolute bottom-full mb-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl transition-all duration-300 origin-bottom ${showSettings ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
             <p className="text-[10px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest">Speed Scroll: {scrollSpeed}x</p>
@@ -504,7 +498,6 @@ export default function ReaderUI({
           </div>
         </div>
 
-        {/* Tombol Kanan (Next) */}
         <div className={`transition-opacity duration-100 ${isAtBottom ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`}>
           {nextCh ? (
             <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]">
