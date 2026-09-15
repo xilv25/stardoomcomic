@@ -13,20 +13,20 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State yang sudah dibersihkan dari TypeScript Generics agar Vercel tidak bingung
+  // State Komentar yang sudah DIBERSIHKAN dari tag generics agar Vercel tidak bingung
   const [commentText, setCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<any>(null);
-  const [commentsList, setCommentsList] = useState<any[]>([]);
-  const [showReplies, setShowReplies] = useState<any>({});
-  const [openMenuId, setOpenMenuId] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [replyingTo, setReplyingTo] = useState(null as any);
+  const [commentsList, setCommentsList] = useState([] as any[]);
+  const [showReplies, setShowReplies] = useState({} as any);
+  const [openMenuId, setOpenMenuId] = useState(null as any);
+  const [currentUser, setCurrentUser] = useState(null as any);
   
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  const textareaRef = useRef<any>(null);
-  const fileInputRef = useRef<any>(null);
+  const textareaRef = useRef(null as any);
+  const fileInputRef = useRef(null as any);
 
   // 0. Ambil Session User & Load Komentar Asli
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function ReaderUI({
         setCommentText('');
         setReplyingTo(null);
         if (data.parent_id) {
-          setShowReplies(prev => ({ ...prev, [data.parent_id]: true }));
+          setShowReplies((prev: any) => ({ ...prev, [data.parent_id]: true }));
         }
       }
     } catch (err: any) {
@@ -220,7 +220,7 @@ export default function ReaderUI({
     try {
       const { error } = await supabase.from('chapter_comments').delete().eq('id', commentId);
       if (error) throw error;
-      setCommentsList(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId));
+      setCommentsList((prev: any[]) => prev.filter(c => c.id !== commentId && c.parent_id !== commentId));
     } catch (err: any) {
       alert("Gagal menghapus: " + err.message);
     }
@@ -233,7 +233,7 @@ export default function ReaderUI({
   };
 
   const toggleReplies = (parentId: string) => {
-    setShowReplies(prev => ({ ...prev, [parentId]: !prev[parentId] }));
+    setShowReplies((prev: any) => ({ ...prev, [parentId]: !prev[parentId] }));
   };
 
   const renderImages = (text: string, keyPrefix: string) => {
@@ -304,7 +304,7 @@ export default function ReaderUI({
             src={pageUrl} 
             alt=" " 
             className="w-full h-auto object-contain block m-0 p-0" 
-            loading={index < 2 ? "eager" : "lazy"} 
+            loading={index === 0 || index === 1 ? "eager" : "lazy"} 
           />
         ))}
       </div>
