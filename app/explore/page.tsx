@@ -2,30 +2,25 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { fetchMangasByGenre } from './actions';
+import { fetchMangasByGenre, fetchPopularMangas } from './actions'; // Import 2 fungsi dari server
 
 export default function ExplorePage() {
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [mangas, setMangas] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Default true agar langsung muncul teks loading
 
   const GENRES = [
     "Action", "Romance", "Fantasy", "Drama", "Comedy", 
     "Sci-Fi", "Horror", "Isekai", "School", "Thriller", "Adventure", "Shounen"
   ];
 
-  // Load awal: Ambil komik populer saat pertama kali buka
+  // Load awal: Ambil komik populer (Sedang Tren) dengan aman dari Server Action
   useEffect(() => {
     const loadPopular = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`https://api.makota.asia/api/v1/manga/popular?limit=16`);
-        // Jika butuh token lewat server action atau langsung (jika API publik)
-        // Kita gunakan data populer default jika belum pilih genre
-        const data = await res.json();
-        if (data.ok && data.data?.results) {
-          setMangas(data.data.results);
-        }
+        const results = await fetchPopularMangas();
+        setMangas(results);
       } catch (e) {
         console.error(e);
       }
@@ -40,9 +35,8 @@ export default function ExplorePage() {
       // Kalau diklik dua kali, reset ke populer awal
       setSelectedGenre(null);
       setLoading(true);
-      const res = await fetch(`https://api.makota.asia/api/v1/manga/popular?limit=16`);
-      const data = await res.json();
-      if (data.ok && data.data?.results) setMangas(data.data.results);
+      const results = await fetchPopularMangas();
+      setMangas(results);
       setLoading(false);
       return;
     }
@@ -63,6 +57,7 @@ export default function ExplorePage() {
           <img src="/ic-compas.jpg" alt="Explore" className="w-5 h-5 mix-blend-screen opacity-80" />
           Explore
         </h1>
+        {/* Tombol Search di kanan atas dihubungkan ke homepage */}
         <Link href="/" className="w-9 h-9 rounded-full bg-[#111] border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg">
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
         </Link>
@@ -70,7 +65,7 @@ export default function ExplorePage() {
 
       <div className="px-4 max-w-xl mx-auto mt-6">
         
-        {/* SECTION 1: PILIH GENRE (TANPA EMOJI, BERSIH) */}
+        {/* SECTION 1: PILIH GENRE */}
         <section className="mb-8">
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Kategori Genre</h2>
@@ -116,7 +111,7 @@ export default function ExplorePage() {
           {loading ? (
             <div className="text-center text-gray-500 text-xs my-20">Memuat daftar komik...</div>
           ) : mangas.length === 0 ? (
-            <div className="text-center text-gray-600 text-xs my-20">Tidak ada komik ditemukan untuk genre ini.</div>
+            <div className="text-center text-gray-600 text-xs my-20">Tidak ada komik ditemukan.</div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:gap-4 animate-fade-in">
               {mangas.map((manga: any, idx: number) => {
@@ -128,10 +123,10 @@ export default function ExplorePage() {
                 return (
                   <div key={manga.slug || idx} className="flex flex-col gap-2">
                     <Link prefetch={false} href={`/manga/${manga.slug}`} className="relative rounded-xl overflow-hidden group aspect-[2/3] border border-white/5 bg-[#111] shadow-lg">
-                      <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                      <img src={manga.thumbnail_url || manga.cover} alt={manga.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                       <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent opacity-80"></div>
                       
-                      {/* RATING BINTANG TETAP ADA */}
+                      {/* RATING BINTANG */}
                       {manga.rating && manga.rating !== "N/A" && (
                         <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-md border border-white/10 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow">
                           <span className="text-yellow-400">★</span> {manga.rating}
@@ -183,4 +178,4 @@ export default function ExplorePage() {
 
     </main>
   );
-}
+      }
