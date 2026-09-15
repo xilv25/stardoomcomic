@@ -119,7 +119,7 @@ export default async function Home({
 
       let mappedChapters: any[] = [];
       if (manga.chapters && Array.isArray(manga.chapters)) {
-        const sortedChapters = [...manga.chapters].sort((a, b) => {
+        const sortedChapters = [...manga.chapters].sort((a: any, b: any) => {
           const numA = parseFloat(a.name.match(/\d+(\.\d+)?/)?.[0] || "0");
           const numB = parseFloat(b.name.match(/\d+(\.\d+)?/)?.[0] || "0");
           return numB - numA; 
@@ -152,7 +152,12 @@ export default async function Home({
   const MAX_PAGES = 5;
   let startPage = Math.max(1, currentPage - 2);
   let endPage = Math.min(totalPages, startPage + MAX_PAGES - 1);
-  if (endPage - startPage + 1 < MAX_PAGES) startPage = Math.max(1, endPage - MAX_PAGES + 1);
+  
+  // SOLUSI BUG VERCEL SWC: Dibalik dari < menjadi > agar tidak dikira tag JSX
+  if (MAX_PAGES > (endPage - startPage + 1)) {
+    startPage = Math.max(1, endPage - MAX_PAGES + 1);
+  }
+
   const paginationArray = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
   const baseQuery = `?type=${activeTab}${searchQuery ? '&q='+searchQuery : ''}`;
 
@@ -360,5 +365,4 @@ export default async function Home({
           <span className="text-[10px] font-bold">Home</span>
         </Link>
         <Link prefetch={false} href="/explore" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
-          <img src="/ic-compas.jpg" alt="Explore" className="w-5 h-5 mb-1 opacity-50 mix-blend-screen" />
-          <span className="text
+          <img src="/ic-compas.j
