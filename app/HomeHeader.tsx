@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchSearchSuggest } from './actions';
-import { supabase } from '../utils/supabase';
+import { supabase } from './utils/supabase';
 
 export default function HomeHeader({ activeTab = 'semua' }: { activeTab?: string }) {
   const [query, setQuery] = useState('');
