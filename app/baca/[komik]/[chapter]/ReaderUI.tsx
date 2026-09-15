@@ -13,52 +13,70 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State Komentar & Fitur Spoiler/Gambar
+  // State Komentar Asli
   const [commentText, setCommentText] = useState('');
-  const [commentsList, setCommentsList] = useState<any[]>([
-    {
-      id: 1,
-      user: 'PembacaSetia',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Reader2',
-      time: '5 mnt lalu',
-      text: 'Wah seru bgt, btw... [spoiler]itu nanti mati[/spoiler] beneran gak nyangka plot twistnya gini!',
-      image: null
-    }
-  ]);
+  const [commentsList, setCommentsList] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [isSending, setIsSending] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 0. Rekam Otomatis Riwayat Baca (Sistem Siluman)
+  // 0. Ambil Session User & Load Komentar Asli dari Database
   useEffect(() => {
     let isMounted = true;
 
-    const saveReadingHistory = async () => {
+    const initReader = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return; 
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('username, avatar_url, role')
+            .eq('id', session.user.id)
+            .single();
 
-        const userId = session.user.id;
-        const payloadData = {
-          user_id: userId,
-          manga_slug: komik,
-          manga_title: judulKomik || komik,
-          cover_url: mangaData?.thumbnail_url || '',
-          last_chapter_slug: chapter,
-          last_chapter_name: namaChapter || chapter,
-          updated_at: new Date()
-        };
+          if (isMounted) {
+            setCurrentUser({
+              id: session.user.id,
+              username: profile?.username || session.user.email?.split('@')[0] || 'Reader',
+              avatar_url: profile?.avatar_url || '/ic-profile.jpg',
+              role: profile?.role || 'user'
+            });
+          }
 
-        await supabase.from('reading_history').upsert(payloadData, { onConflict: 'user_id, manga_slug' });
+          // Simpan Riwayat Baca (Sistem Siluman)
+          await supabase.from('reading_history').upsert({
+            user_id: session.user.id,
+            manga_slug: komik,
+            manga_title: judulKomik || komik,
+            cover_url: mangaData?.thumbnail_url || '',
+            last_chapter_slug: chapter,
+            last_chapter_name: namaChapter || chapter,
+            updated_at: new Date()
+          }, { onConflict: 'user_id, manga_slug' });
+        }
+
+        // Fetch Komentar untuk Chapter ini
+        const { data: comments, error } = await supabase
+          .from('chapter_comments')
+          .select('*')
+          .eq('manga_slug', komik)
+          .eq('chapter_slug', chapter)
+          .order('created_at', { ascending: false });
+
+        if (!error && comments && isMounted) {
+          setCommentsList(comments);
+        }
       } catch (err) {
-        console.error("System Crash:", err);
+        console.error("Error init reader:", err);
+      } finally {
+        if (isMounted) setLoadingComments(false);
       }
     };
 
     if (komik && chapter) {
-      const timer = setTimeout(() => {
-        if (isMounted) saveReadingHistory();
-      }, 2000);
-      return () => clearTimeout(timer);
+      initReader();
     }
 
     return () => { isMounted = false; };
@@ -87,7 +105,7 @@ export default function ReaderUI({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 2. Logika Auto Scroll (Bisa Berhenti Manual saat User Scroll/Sentuh Layar)
+  // 2. Logika Auto Scroll (Bisa Berhenti Manual)
   useEffect(() => {
     let animationId: number;
     const scroll = () => {
@@ -105,11 +123,8 @@ export default function ReaderUI({
       setNavVisible(false);
     }
 
-    // Listener untuk mendeteksi interaksi manual user agar Auto-Scroll berhenti
     const stopAutoScroll = () => {
-      if (isAutoScrolling) {
-        setIsAutoScrolling(false);
-      }
+      if (isAutoScrolling) setIsAutoScrolling(false);
     };
 
     window.addEventListener('wheel', stopAutoScroll, { passive: true });
@@ -124,56 +139,87 @@ export default function ReaderUI({
     };
   }, [isAutoScrolling, scrollSpeed, isAtBottom]);
 
-  // Fungsi Pintasan Jump to Top / Bottom
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  // Tombol Pintasan Jump
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollToBottom = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
-  const scrollToBottom = () => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-  };
-
-  // Fungsi Tombol Spoiler & Gambar di Komentar
+  // Tombol Spoiler & Gambar
   const addSpoilerTag = () => {
     if (!textareaRef.current) return;
     const start = textareaRef.current.selectionStart;
     const end = textareaRef.current.selectionEnd;
     const text = commentText;
     const highlighted = text.substring(start, end) || 'teks spoiler';
-    const newText = text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end);
-    setCommentText(newText);
+    setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
   };
 
   const addImageComment = () => {
     const imgUrl = prompt("Masukkan URL Gambar:");
-    if (imgUrl) {
-      setCommentText(prev => prev + `\n[img]${imgUrl}[/img]`);
+    if (imgUrl) setCommentText(prev => prev + `\n[img]${imgUrl}[/img]`);
+  };
+
+  // Kirim Komentar Asli ke Database
+  const handlePostComment = async () => {
+    if (!commentText.trim()) return;
+    if (!currentUser) {
+      alert("Silakan login terlebih dahulu untuk mengirim komentar!");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const newCommentData = {
+        manga_slug: komik,
+        chapter_slug: chapter,
+        user_id: currentUser.id,
+        username: currentUser.username,
+        avatar_url: currentUser.avatar_url,
+        role: currentUser.role,
+        content: commentText.trim(),
+        created_at: new Date()
+      };
+
+      const { data, error } = await supabase
+        .from('chapter_comments')
+        .insert([newCommentData])
+        .select()
+        .single();
+
+      if (error) {
+        alert("Gagal mengirim komentar: " + error.message);
+      } else if (data) {
+        setCommentsList([data, ...commentsList]);
+        setCommentText('');
+      }
+    } catch (err) {
+      console.error("Gagal kirim komentar:", err);
+    } finally {
+      setIsSending(false);
     }
   };
 
-  const handlePostComment = () => {
-    if (!commentText.trim()) return;
-    const newCmt = {
-      id: Date.now(),
-      user: 'Kamu',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CurrentUser',
-      time: 'Baru saja',
-      text: commentText,
-      image: null
-    };
-    setCommentsList([newCmt, ...commentsList]);
-    setCommentText('');
+  // Helper Render Format (Spoiler & Gambar)
+  const renderFormattedContent = (text: string) => {
+    if (text.includes('[img]') && text.includes('[/img]')) {
+      const parts = text.split(/(\[img\].*?\[\/img\])/g);
+      return parts.map((part, i) => {
+        if (part.startsWith('[img]') && part.endsWith('[/img]')) {
+          const url = part.replace('[img]', '').replace('[/img]', '');
+          return <img key={i} src={url} alt="User Upload" className="max-h-48 rounded-lg mt-2 object-cover border border-white/10" />;
+        }
+        return renderSpoiler(part, i);
+      });
+    }
+    return renderSpoiler(text, 0);
   };
 
-  // Helper parsing teks spoiler [spoiler]...[/spoiler]
-  const renderFormattedComment = (text: string) => {
-    // Sederhana: ubah [spoiler] jadi elemen blur rahasia
+  const renderSpoiler = (text: string, keyPrefix: number) => {
     const parts = text.split(/(\[spoiler\].*?\[\/spoiler\])/g);
     return parts.map((part, i) => {
       if (part.startsWith('[spoiler]') && part.endsWith('[/spoiler]')) {
         const actualText = part.replace('[spoiler]', '').replace('[/spoiler]', '');
         return (
-          <span key={i} className="bg-white/10 text-transparent hover:text-white px-1.5 rounded blur-[4px] hover:blur-none transition-all duration-300 cursor-pointer border border-white/5 select-none hover:select-auto mx-1">
+          <span key={`${keyPrefix}-${i}`} className="bg-white/10 text-transparent hover:text-white px-1.5 rounded blur-[4px] hover:blur-none transition-all duration-300 cursor-pointer border border-white/5 select-none hover:select-auto mx-1">
             {actualText}
           </span>
         );
@@ -185,7 +231,7 @@ export default function ReaderUI({
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
       
-      {/* HEADER MELAYANG (TRANSPARAN) */}
+      {/* HEADER MELAYANG */}
       <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
         <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
           <img src="/ic-arrow-left.jpg" alt="Back" className="w-5 h-5 mix-blend-screen opacity-80" />
@@ -202,17 +248,17 @@ export default function ReaderUI({
         </Link>
       </header>
 
-      {/* TOMBOL PINTASAN JUMP (UP & DOWN) DI KANAN */}
+      {/* TOMBOL PINTASAN JUMP (UP & DOWN DENGAN ICON ASLI & BACKGROUND KACA) */}
       <div className={`fixed right-4 bottom-24 z-40 flex flex-col gap-2 transition-opacity duration-300 ${navVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <button onClick={scrollToTop} className="w-10 h-10 bg-black/60 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-gray-300 hover:bg-white/20 shadow-lg transition-all" title="Ke Atas">
-          ▲
+        <button onClick={scrollToTop} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Atas">
+          <img src="/ic-up.jpg" alt="Up" className="w-5 h-5 mix-blend-screen opacity-80" />
         </button>
-        <button onClick={scrollToBottom} className="w-10 h-10 bg-black/60 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-gray-300 hover:bg-white/20 shadow-lg transition-all" title="Ke Bawah">
-          ▼
+        <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah">
+          <img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" />
         </button>
       </div>
 
-      {/* AREA GAMBAR (KLIK UNTUK FULLSCREEN) */}
+      {/* AREA GAMBAR */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); }}
@@ -224,7 +270,7 @@ export default function ReaderUI({
 
       <div className="max-w-2xl mx-auto px-4 mt-8">
         
-        {/* TOMBOL NEXT/PREV STATIS DI BAWAH (Hanya muncul jika mentok bawah) */}
+        {/* TOMBOL NEXT/PREV DI BAWAH */}
         {isAtBottom && (
           <div className="flex justify-between items-center gap-4 py-6 border-b border-white/5 animate-fade-in">
             {prevCh ? (
@@ -245,10 +291,10 @@ export default function ReaderUI({
           </div>
         )}
 
-        {/* KOLOM KOMENTAR & SPOILER & GAMBAR */}
+        {/* KOLOM KOMENTAR ASLI */}
         <div className="mt-8 pb-36">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-200">
-            💬 Diskusi Chapter
+            💬 Diskusi Chapter ({commentsList.length})
           </h3>
           
           <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-8 focus-within:border-red-500/50 focus-within:bg-white/10 transition-all shadow-inner">
@@ -256,43 +302,74 @@ export default function ReaderUI({
               ref={textareaRef}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Tulis teorimu di sini..." 
-              className="w-full bg-transparent text-sm text-white focus:outline-none resize-none min-h-[70px] placeholder:text-gray-600"
+              placeholder={currentUser ? "Tulis teorimu di sini..." : "Silakan login untuk berkomentar..."}
+              disabled={!currentUser}
+              className="w-full bg-transparent text-sm text-white focus:outline-none resize-none min-h-[70px] placeholder:text-gray-600 disabled:opacity-50"
             ></textarea>
             
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5">
               <div className="flex gap-2">
-                <button onClick={addImageComment} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400" title="Kirim Gambar">📷</button>
-                <button onClick={addSpoilerTag} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-red-400 flex items-center justify-center text-sm transition-all text-gray-400" title="Sensor Spoiler">👁️‍🗨️</button>
+                <button onClick={addImageComment} disabled={!currentUser} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Kirim Gambar">📷</button>
+                <button onClick={addSpoilerTag} disabled={!currentUser} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-red-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Sensor Spoiler">👁️‍🗨️</button>
               </div>
-              <button onClick={handlePostComment} className="px-5 py-2 bg-red-800 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">Kirim</button>
+              <button 
+                onClick={handlePostComment} 
+                disabled={isSending || !currentUser} 
+                className="px-5 py-2 bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow"
+              >
+                {isSending ? 'Mengirim...' : 'Kirim'}
+              </button>
             </div>
           </div>
           
-          {/* DAFTAR KOMENTAR */}
+          {/* DAFTAR KOMENTAR REAL-TIME (DENGAN LINK KE PROFIL USER) */}
           <div className="flex flex-col gap-6">
-            {commentsList.map((cmt) => (
-              <div key={cmt.id} className="flex gap-3">
-                 <div className="w-9 h-9 rounded-full bg-white/10 shrink-0 overflow-hidden"><img src={cmt.avatar} alt="Avatar"/></div>
-                 <div className="flex flex-col flex-1 overflow-hidden">
-                    <div className="flex gap-2 items-baseline">
-                       <span className="text-sm font-bold text-gray-200">{cmt.user}</span>
-                       <span className="text-[10px] text-gray-500">{cmt.time}</span>
-                    </div>
-                    <p className="text-xs text-gray-300 mt-1 leading-relaxed break-words">
-                      {renderFormattedComment(cmt.text)}
-                    </p>
-                 </div>
-              </div>
-            ))}
+            {loadingComments ? (
+              <div className="text-center text-xs text-gray-500 py-6">Memuat diskusi...</div>
+            ) : commentsList.length === 0 ? (
+              <div className="text-center text-xs text-gray-500 py-6">Belum ada komentar di chapter ini. Jadilah yang pertama!</div>
+            ) : (
+              commentsList.map((cmt) => (
+                <div key={cmt.id} className="flex gap-3 bg-white/[0.02] border border-white/5 p-3.5 rounded-2xl shadow-sm">
+                   
+                   {/* Avatar bisa diklik ke profil user */}
+                   <Link href={`/profile/${cmt.user_id}`} className="w-10 h-10 rounded-xl bg-white/10 shrink-0 overflow-hidden border border-white/10 hover:border-red-500 transition-colors">
+                     <img src={cmt.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
+                   </Link>
+
+                   <div className="flex flex-col flex-1 overflow-hidden">
+                      <div className="flex gap-2 items-center">
+                         {/* Username bisa diklik ke profil user */}
+                         <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 transition-colors">
+                           {cmt.username || 'Reader'}
+                         </Link>
+                         
+                         {/* BADGE ROLE SYSTEM */}
+                         {cmt.role === 'admin' && (
+                           <span className="bg-red-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-red-800">Admin</span>
+                         )}
+                         {cmt.role === 'uploader' && (
+                           <span className="bg-blue-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-blue-800">Uploader</span>
+                         )}
+
+                         <span className="text-[10px] text-gray-500 ml-auto">
+                           {new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                         </span>
+                      </div>
+                      <div className="text-xs text-gray-300 mt-1.5 leading-relaxed break-words font-medium">
+                        {renderFormattedContent(cmt.content)}
+                      </div>
+                   </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      {/* BOTTOM NAVIGATION (MELAYANG & ANTI-GETAR / STABLE LAYOUT) */}
+      {/* BOTTOM NAVIGATION (STABLE / ANTI-GETAR) */}
       <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
         
-        {/* TOMBOL KIRI (PREV): Menggunakan visibility:hidden agar lebar kontainer stabil & tidak getar */}
         <div className={`transition-opacity duration-300 ${isAtBottom ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`} aria-hidden={isAtBottom}>
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg">
@@ -301,7 +378,6 @@ export default function ReaderUI({
           ) : <div className="w-12 h-12"></div>}
         </div>
 
-        {/* PILL TENGAH (Menu & Auto Scroll) */}
         <div className="flex-1 relative flex justify-center">
           <div className={`absolute bottom-full mb-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl transition-all duration-300 origin-bottom ${showSettings ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
             <p className="text-[10px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest">Speed Scroll: {scrollSpeed}x</p>
@@ -333,16 +409,4 @@ export default function ReaderUI({
           </div>
         </div>
 
-        {/* TOMBOL KANAN (NEXT): Menggunakan visibility:hidden agar stabil */}
-        <div className={`transition-opacity duration-300 ${isAtBottom ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`} aria-hidden={isAtBottom}>
-          {nextCh ? (
-            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]">
-              <img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" />
-            </Link>
-          ) : <div className="w-12 h-12"></div>}
-        </div>
-
-      </div>
-    </div>
-  );
-}
+        <div className={`tran
