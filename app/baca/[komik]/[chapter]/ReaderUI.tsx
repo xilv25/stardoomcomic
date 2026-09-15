@@ -13,10 +13,12 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State Komentar, Reply, & Upload Gambar Device
+  // State Komentar & Reply Sosmed
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [commentsList, setCommentsList] = useState<any[]>([]);
+  const [showReplies, setShowReplies] = useState<Record<string, boolean>>({}); // State untuk toggle 'Lihat Balasan'
+  
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -25,7 +27,7 @@ export default function ReaderUI({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 0. Ambil Session User & Load Komentar Asli dari Database
+  // 0. Ambil Session User & Load Komentar Asli
   useEffect(() => {
     let isMounted = true;
 
@@ -48,7 +50,7 @@ export default function ReaderUI({
             });
           }
 
-          // Simpan Riwayat Baca (Sistem Siluman)
+          // Simpan Riwayat (Sistem Siluman)
           await supabase.from('reading_history').upsert({
             user_id: session.user.id,
             manga_slug: komik,
@@ -60,7 +62,7 @@ export default function ReaderUI({
           }, { onConflict: 'user_id, manga_slug' });
         }
 
-        // Fetch Komentar untuk Chapter ini
+        // Fetch Komentar Chapter (Termasuk parent_id)
         const { data: comments, error } = await supabase
           .from('chapter_comments')
           .select('*')
@@ -81,11 +83,10 @@ export default function ReaderUI({
     if (komik && chapter) {
       initReader();
     }
-
     return () => { isMounted = false; };
   }, [komik, chapter, judulKomik, namaChapter, mangaData]);
   
-  // 1. Logika Hide Nav on Scroll & Deteksi Bawah
+  // 1. Logika Auto Scroll & Deteksi Layout Bawah
   useEffect(() => {
     let lastScrollY = window.scrollY;
     
@@ -100,7 +101,6 @@ export default function ReaderUI({
       } else if (currentScrollY < lastScrollY) {
         setNavVisible(true);
       }
-      
       lastScrollY = currentScrollY;
     };
 
@@ -108,7 +108,6 @@ export default function ReaderUI({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 2. Logika Auto Scroll (Bisa Berhenti Manual)
   useEffect(() => {
     let animationId: number;
     const scroll = () => {
@@ -126,10 +125,7 @@ export default function ReaderUI({
       setNavVisible(false);
     }
 
-    const stopAutoScroll = () => {
-      if (isAutoScrolling) setIsAutoScrolling(false);
-    };
-
+    const stopAutoScroll = () => { if (isAutoScrolling) setIsAutoScrolling(false); };
     window.addEventListener('wheel', stopAutoScroll, { passive: true });
     window.addEventListener('touchstart', stopAutoScroll, { passive: true });
     window.addEventListener('mousedown', stopAutoScroll, { passive: true });
@@ -142,29 +138,14 @@ export default function ReaderUI({
     };
   }, [isAutoScrolling, scrollSpeed, isAtBottom]);
 
-  // Tombol Pintasan Jump
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const scrollToBottom = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
-  // Tombol Spoiler
-  const addSpoilerTag = () => {
-    if (!textareaRef.current) return;
-    const start = textareaRef.current.selectionStart;
-    const end = textareaRef.current.selectionEnd;
-    const text = commentText;
-    const highlighted = text.substring(start, end) || 'teks spoiler';
-    setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
-  };
-
-  // Upload Gambar dari Device User ke Supabase Storage (FIXED SYNTAX)
+  // Upload Gambar dari Device
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!currentUser) {
-      alert("Silakan login terlebih dahulu untuk mengunggah gambar!");
-      return;
-    }
+    if (!currentUser) return alert("Silakan login terlebih dahulu!");
 
     setUploadingImage(true);
     try {
@@ -172,20 +153,10 @@ export default function ReaderUI({
       const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
       const filePath = `comments/${fileName}`;
 
-      // Upload ke bucket Supabase Storage 'comment-images'
-      const { error: uploadError } = await supabase.storage
-        .from('comment-images')
-        .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('comment-images').upload(filePath, file);
+      if (uploadError) throw uploadError;
 
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Ambil Public URL dari gambar yang diupload
-      const { data: { publicUrl } } = supabase.storage
-        .from('comment-images')
-        .getPublicUrl(filePath);
-
+      const { data: { publicUrl } } = supabase.storage.from('comment-images').getPublicUrl(filePath);
       setCommentText(prev => prev + `\n[img]${publicUrl}[/img]`);
     } catch (err: any) {
       alert("Gagal mengunggah gambar: " + err.message);
@@ -195,19 +166,25 @@ export default function ReaderUI({
     }
   };
 
-  // Kirim Komentar / Reply ke Database
-  const handlePostComment = async () => {
-    if (!commentText.trim()) return;
-    if (!currentUser) {
-      alert("Silakan login terlebih dahulu untuk mengirim komentar!");
-      return;
-    }
+  const addSpoilerTag = () => {
+    if (!textareaRef.current) return;
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    const text = commentText;
+    const highlighted = text.substring(start, end) || 'teks spoiler';
+    setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
+  };
 
+  // Kirim Komentar / Reply
+  const handlePostComment = async () => {
+    if (!commentText.trim() || !currentUser) return;
     setIsSending(true);
+
     try {
       let finalContent = commentText.trim();
-      if (replyingTo) {
-        finalContent = `> Membalas @${replyingTo.username}:\n${finalContent}`;
+      // Kalau nge-reply balasan milik orang, kita kasih tag username-nya di teks
+      if (replyingTo && replyingTo.parent_id !== null) {
+        finalContent = `@${replyingTo.username} ${finalContent}`;
       }
 
       const newCommentData = {
@@ -218,63 +195,67 @@ export default function ReaderUI({
         avatar_url: currentUser.avatar_url,
         role: currentUser.role,
         content: finalContent,
+        parent_id: replyingTo ? (replyingTo.parent_id || replyingTo.id) : null, // Kunci Nested Reply
         created_at: new Date()
       };
 
-      const { data, error } = await supabase
-        .from('chapter_comments')
-        .insert([newCommentData])
-        .select()
-        .single();
+      const { data, error } = await supabase.from('chapter_comments').insert([newCommentData]).select().single();
 
-      if (error) {
-        alert("Gagal mengirim komentar: " + error.message);
-      } else if (data) {
+      if (error) throw error;
+      if (data) {
         setCommentsList([data, ...commentsList]);
         setCommentText('');
         setReplyingTo(null);
+        
+        // Auto buka balasan jika user baru saja mereply
+        if (data.parent_id) setShowReplies(prev => ({ ...prev, [data.parent_id]: true }));
       }
-    } catch (err) {
-      console.error("Gagal kirim komentar:", err);
+    } catch (err: any) {
+      alert("Gagal mengirim komentar: " + err.message);
     } finally {
       setIsSending(false);
     }
   };
 
-  // Helper Render Format (Spoiler & Gambar)
-  const renderFormattedContent = (text: string) => {
-    if (text.includes('[img]') && text.includes('[/img]')) {
-      const parts = text.split(/(\[img\].*?\[\/img\])/g);
-      return parts.map((part, i) => {
-        if (part.startsWith('[img]') && part.endsWith('[/img]')) {
-          const url = part.replace('[img]', '').replace('[/img]', '');
-          return <img key={i} src={url} alt="Uploaded" className="max-h-48 rounded-lg mt-2 object-cover border border-white/10 shadow" />;
-        }
-        return renderSpoiler(part, i);
-      });
-    }
-    return renderSpoiler(text, 0);
+  const toggleReplies = (parentId: string) => {
+    setShowReplies(prev => ({ ...prev, [parentId]: !prev[parentId] }));
   };
 
-  const renderSpoiler = (text: string, keyPrefix: number) => {
-    const parts = text.split(/(\[spoiler\].*?\[\/spoiler\])/g);
-    return parts.map((part, i) => {
+  // Parser Spoiler & Gambar Responsif
+  const renderImages = (text: string, keyPrefix: string) => {
+    const imgParts = text.split(/(\[img\].*?\[\/img\])/g);
+    return imgParts.map((part, i) => {
+      if (part.startsWith('[img]') && part.endsWith('[/img]')) {
+        const url = part.replace('[img]', '').replace('[/img]', '');
+        return <img key={`${keyPrefix}-img-${i}`} src={url} alt=" " className="max-w-[200px] max-h-48 rounded-xl mt-2 object-cover border border-white/10 shadow-lg block" loading="lazy" />;
+      }
+      return <span key={`${keyPrefix}-txt-${i}`}>{part}</span>;
+    });
+  };
+
+  const renderFormattedContent = (text: string) => {
+    const spoilerParts = text.split(/(\[spoiler\][\s\S]*?\[\/spoiler\])/g);
+    return spoilerParts.map((part, i) => {
       if (part.startsWith('[spoiler]') && part.endsWith('[/spoiler]')) {
         const actualText = part.replace('[spoiler]', '').replace('[/spoiler]', '');
         return (
-          <span key={`${keyPrefix}-${i}`} className="bg-white/10 text-transparent hover:text-white px-1.5 rounded blur-[4px] hover:blur-none transition-all duration-300 cursor-pointer border border-white/5 select-none hover:select-auto mx-1">
-            {actualText}
+          <span key={`spoiler-${i}`} className="bg-white/10 text-transparent hover:text-white px-2 py-1 rounded blur-[6px] hover:blur-none transition-all duration-300 cursor-pointer border border-white/5 select-none hover:select-auto inline-block align-middle overflow-hidden group mb-1">
+            <span className="group-hover:opacity-100 opacity-60 transition-opacity">
+              {renderImages(actualText, `innerspoiler-${i}`)}
+            </span>
           </span>
         );
       }
-      return part;
+      return renderImages(part, `outer-${i}`);
     });
   };
+
+  // Filter Main Komentar (Yang tidak punya parent_id)
+  const mainComments = commentsList.filter(c => !c.parent_id);
 
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
       
-      {/* HEADER MELAYANG */}
       <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
         <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
           <img src="/ic-arrow-left.jpg" alt="Back" className="w-5 h-5 mix-blend-screen opacity-80" />
@@ -291,17 +272,12 @@ export default function ReaderUI({
         </Link>
       </header>
 
-      {/* TOMBOL PINTASAN JUMP (UP & DOWN) */}
       <div className={`fixed right-4 bottom-24 z-40 flex flex-col gap-2 transition-opacity duration-300 ${navVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <button onClick={scrollToTop} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Atas">
-          <img src="/ic-up.jpg" alt="Up" className="w-5 h-5 mix-blend-screen opacity-80" />
-        </button>
-        <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah">
-          <img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" />
-        </button>
+        <button onClick={scrollToTop} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Atas"><img src="/ic-up.jpg" alt="Up" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
+        <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah"><img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
       </div>
 
-      {/* AREA GAMBAR */}
+      {/* AREA RENDERING GAMBAR (FIXED: Tanpa bolong teks jelek, memuat se-natural mungkin) */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); }}
@@ -310,16 +286,15 @@ export default function ReaderUI({
           <img 
             key={index} 
             src={pageUrl} 
-            alt={`Halaman ${index + 1}`} 
-            className="w-full h-auto object-contain block m-0 p-0" 
-            loading={index < 3 ? "eager" : "lazy"} 
+            alt=" "  /* Kosongkan agar tulisan .jpg jelek tidak muncul */
+            className="w-full h-auto object-contain block m-0 p-0 bg-[#050505] min-h-[300px] text-transparent" 
+            /* Browser otomatis memprioritaskan download sesuai urutan DOM (atas ke bawah) */
           />
         ))}
       </div>
 
       <div className="max-w-2xl mx-auto px-4 mt-8">
-        
-        {/* TOMBOL NEXT/PREV PERMANEN DI BAWAH */}
+        {/* TOMBOL NEXT/PREV PERMANEN DI BAWAH KOMIK */}
         <div className="flex justify-between items-center gap-4 py-6 border-b border-white/5">
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all">
@@ -338,7 +313,7 @@ export default function ReaderUI({
           )}
         </div>
 
-        {/* KOLOM KOMENTAR */}
+        {/* AREA KOMENTAR */}
         <div className="mt-8 pb-36">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-200">
             💬 Diskusi Chapter ({commentsList.length})
@@ -347,7 +322,7 @@ export default function ReaderUI({
           <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-8 focus-within:border-red-500/50 focus-within:bg-white/10 transition-all shadow-inner relative">
             
             {replyingTo && (
-              <div className="flex justify-between items-center bg-black/40 px-3 py-1.5 rounded-lg mb-2 border border-white/10 text-xs text-gray-300">
+              <div className="flex justify-between items-center bg-black/40 px-3 py-2 rounded-lg mb-3 border border-white/10 text-[11px] text-gray-300">
                 <span>Membalas <strong className="text-red-400">@{replyingTo.username}</strong></span>
                 <button onClick={() => setReplyingTo(null)} className="text-red-500 font-bold hover:underline">Batalkan</button>
               </div>
@@ -364,149 +339,124 @@ export default function ReaderUI({
             
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5">
               <div className="flex gap-2 items-center">
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleImageUpload} 
-                  accept="image/*" 
-                  className="hidden" 
-                />
-
-                <button 
-                  onClick={() => fileInputRef.current?.click()} 
-                  disabled={!currentUser || uploadingImage} 
-                  className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" 
-                  title="Upload Gambar"
-                >
-                  {uploadingImage ? '⏳' : '📷'}
-                </button>
-
-                <button 
-                  onClick={addSpoilerTag} 
-                  disabled={!currentUser} 
-                  className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-red-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" 
-                  title="Sensor Spoiler"
-                >
-                  👁️‍🗨️
-                </button>
+                <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                <button onClick={() => fileInputRef.current?.click()} disabled={!currentUser || uploadingImage} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Upload Gambar dari HP">{uploadingImage ? '⏳' : '📷'}</button>
+                <button onClick={addSpoilerTag} disabled={!currentUser} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-red-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Sensor Spoiler">👁️‍🗨️</button>
               </div>
-
-              <button 
-                onClick={handlePostComment} 
-                disabled={isSending || !currentUser} 
-                className="px-5 py-2 bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow"
-              >
-                {isSending ? 'Mengirim...' : 'Kirim'}
-              </button>
+              <button onClick={handlePostComment} disabled={isSending || !currentUser} className="px-5 py-2 bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow">{isSending ? 'Mengirim...' : 'Kirim'}</button>
             </div>
           </div>
           
-          {/* DAFTAR KOMENTAR */}
+          {/* DAFTAR KOMENTAR & NESTED REPLY */}
           <div className="flex flex-col gap-6">
             {loadingComments ? (
               <div className="text-center text-xs text-gray-500 py-6">Memuat diskusi...</div>
-            ) : commentsList.length === 0 ? (
-              <div className="text-center text-xs text-gray-500 py-6">Belum ada komentar di chapter ini. Jadilah yang pertama!</div>
+            ) : mainComments.length === 0 ? (
+              <div className="text-center text-xs text-gray-500 py-6">Belum ada komentar. Jadilah yang pertama!</div>
             ) : (
-              commentsList.map((cmt) => (
-                <div key={cmt.id} className="flex gap-3 bg-white/[0.02] border border-white/5 p-3.5 rounded-2xl shadow-sm">
-                   
-                   <Link href={`/profile/${cmt.user_id}`} className="w-10 h-10 rounded-xl bg-white/10 shrink-0 overflow-hidden border border-white/10 hover:border-red-500 transition-colors">
-                     <img src={cmt.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
-                   </Link>
+              mainComments.map((cmt) => {
+                // Ambil daftar balasan khusus untuk komentar utama ini (Di-reverse agar yang terlama di atas)
+                const replies = commentsList.filter(c => c.parent_id === cmt.id).reverse();
+                
+                return (
+                  <div key={cmt.id} className="flex flex-col gap-2">
+                    
+                    {/* KOMENTAR UTAMA */}
+                    <div className="flex gap-3 bg-white/[0.02] border border-white/5 p-3.5 rounded-2xl shadow-sm">
+                       <Link href={`/profile/${cmt.user_id}`} className="w-10 h-10 rounded-xl bg-white/10 shrink-0 overflow-hidden border border-white/10 hover:border-red-500 transition-colors">
+                         <img src={cmt.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
+                       </Link>
+                       <div className="flex flex-col flex-1 overflow-hidden">
+                          <div className="flex gap-2 items-center">
+                             <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 transition-colors">{cmt.username || 'Reader'}</Link>
+                             {cmt.role === 'admin' && <span className="bg-red-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-red-800">Admin</span>}
+                             {cmt.role === 'uploader' && <span className="bg-blue-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-blue-800">Uploader</span>}
+                             <span className="text-[10px] text-gray-500 ml-auto">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <div className="text-xs text-gray-300 mt-1.5 leading-relaxed break-words font-medium">
+                            {renderFormattedContent(cmt.content)}
+                          </div>
+                          <div className="mt-2 flex justify-end">
+                            <button 
+                              onClick={() => { setReplyingTo({ id: cmt.id, username: cmt.username, parent_id: cmt.id }); textareaRef.current?.focus(); }}
+                              className="text-[10px] font-bold text-gray-500 hover:text-red-400 transition-colors"
+                            >
+                              Balas
+                            </button>
+                          </div>
+                       </div>
+                    </div>
 
-                   <div className="flex flex-col flex-1 overflow-hidden">
-                      <div className="flex gap-2 items-center">
-                         <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 transition-colors">
-                           {cmt.username || 'Reader'}
-                         </Link>
-                         
-                         {cmt.role === 'admin' && (
-                           <span className="bg-red-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-red-800">Admin</span>
-                         )}
-                         {cmt.role === 'uploader' && (
-                           <span className="bg-blue-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-blue-800">Uploader</span>
-                         )}
-
-                         <span className="text-[10px] text-gray-500 ml-auto">
-                           {new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                         </span>
-                      </div>
-
-                      <div className="text-xs text-gray-300 mt-1.5 leading-relaxed break-words font-medium">
-                        {renderFormattedContent(cmt.content)}
-                      </div>
-
-                      <div className="mt-2 flex justify-end">
+                    {/* TOMBOL LIHAT BALASAN */}
+                    {replies.length > 0 && (
+                      <div className="ml-12 mt-1">
                         <button 
-                          onClick={() => {
-                            setReplyingTo({ id: cmt.id, username: cmt.username });
-                            textareaRef.current?.focus();
-                          }}
-                          className="text-[10px] font-bold text-gray-500 hover:text-red-400 transition-colors"
+                          onClick={() => toggleReplies(cmt.id)} 
+                          className="text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
                         >
-                          Balas
+                          <span className="w-6 h-[1px] bg-gray-600 inline-block"></span>
+                          {showReplies[cmt.id] ? 'Sembunyikan Balasan' : `Lihat ${replies.length} Balasan`}
                         </button>
                       </div>
-                   </div>
-                </div>
-              ))
+                    )}
+
+                    {/* DAFTAR BALASAN (MENJOROK KE KANAN) */}
+                    {showReplies[cmt.id] && replies.length > 0 && (
+                      <div className="ml-10 sm:ml-12 flex flex-col gap-3 mt-2 animate-fade-in border-l-2 border-white/5 pl-3">
+                        {replies.map(reply => (
+                          <div key={reply.id} className="flex gap-3 bg-white/[0.01] p-3 rounded-xl border border-white/5">
+                             <Link href={`/profile/${reply.user_id}`} className="w-8 h-8 rounded-lg bg-white/10 shrink-0 overflow-hidden border border-white/10">
+                               <img src={reply.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
+                             </Link>
+                             <div className="flex flex-col flex-1 overflow-hidden">
+                                <div className="flex gap-2 items-center">
+                                   <Link href={`/profile/${reply.user_id}`} className="text-[11px] font-bold text-gray-200 hover:text-red-400">{reply.username || 'Reader'}</Link>
+                                   {reply.role === 'admin' && <span className="bg-red-900 text-white text-[7px] font-extrabold px-1 py-0.5 rounded uppercase">Admin</span>}
+                                   <span className="text-[9px] text-gray-500 ml-auto">{new Date(reply.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
+                                  {renderFormattedContent(reply.content)}
+                                </div>
+                                <div className="mt-1 flex justify-end">
+                                  <button onClick={() => { setReplyingTo({ id: reply.id, username: reply.username, parent_id: cmt.id }); textareaRef.current?.focus(); }} className="text-[10px] font-bold text-gray-500 hover:text-red-400">
+                                    Balas
+                                  </button>
+                                </div>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
       </div>
 
-      {/* BOTTOM NAVIGATION (Tombol bulat kanan-kiri yang menghilang otomatis saat pas mentok bawah gambar) */}
       <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
-        
-        <div className={`transition-opacity duration-100 ${isAtBottom ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`}>
+        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
           {prevCh ? (
-            <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg">
-              <img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" />
-            </Link>
+            <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg"><img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" /></Link>
           ) : <div className="w-12 h-12"></div>}
         </div>
-
         <div className="flex-1 relative flex justify-center">
-          <div className={`absolute bottom-full mb-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl transition-all duration-300 origin-bottom ${showSettings ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
-            <p className="text-[10px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest">Speed Scroll: {scrollSpeed}x</p>
-            <input 
-              type="range" min="1" max="10" value={scrollSpeed} 
-              onChange={(e) => setScrollSpeed(Number(e.target.value))}
-              className="w-32 accent-red-600 cursor-pointer"
-            />
-          </div>
-
           <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-full px-5 py-2.5 flex gap-4 sm:gap-5 items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
-            <button onClick={() => setShowSettings(!showSettings)} className="hover:opacity-100 opacity-70 transition-opacity" title="Pengaturan Scroll">
-              <img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" />
-            </button>
-            
-            <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll">
-              <img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} />
-            </button>
-
-            <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark">
-              <img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" />
-            </button>
-            
+            <button onClick={() => setShowSettings(!showSettings)} className="hover:opacity-100 opacity-70 transition-opacity" title="Pengaturan Scroll"><img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" /></button>
+            <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll"><img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} /></button>
+            <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark"><img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" /></button>
             <div className="w-[1px] h-5 bg-white/20"></div>
-            
-            <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik">
-              <img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" />
-            </Link>
+            <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik"><img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" /></Link>
           </div>
         </div>
-
-        <div className={`transition-opacity duration-100 ${isAtBottom ? 'opacity-0 pointer-events-none select-none' : 'opacity-100'}`}>
+        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
           {nextCh ? (
-            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]">
-              <img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" />
-            </Link>
+            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]"><img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" /></Link>
           ) : <div className="w-12 h-12"></div>}
         </div>
-
       </div>
     </div>
   );
-}
+              }
