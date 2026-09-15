@@ -26,17 +26,16 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
         if (session?.user) {
           const userId = session.user.id;
 
-          // 1. Cek Bookmark
+          // Cek Bookmark
           const { data: bmData } = await supabase
             .from('bookmarks')
             .select('*')
             .eq('user_id', userId)
             .eq('manga_slug', slug)
-            .maybeSingle(); // Pakai maybeSingle supaya tidak error jika kosong
-          
+            .maybeSingle();
           if (bmData) setIsBookmarked(true);
 
-          // 2. Cek Riwayat Baca (History)
+          // Cek Riwayat Baca
           const { data: histData, error: histError } = await supabase
             .from('reading_history')
             .select('*')
@@ -49,13 +48,18 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
           }
         }
       } catch (err) {
-        console.error("Gagal memuat status user:", err);
+        console.error("Gagal memuat status user", err);
       } finally {
         setLoadingUser(false);
       }
     };
 
+    // 1. Load saat pertama kali buka halaman
     fetchUserStatus();
+
+    // 2. Trik Anti-Cache: Load ulang otomatis saat tab kembali fokus / habis klik Back
+    window.addEventListener('focus', fetchUserStatus);
+    return () => window.removeEventListener('focus', fetchUserStatus);
   }, [slug]);
 
   // Handle Bookmark (Simpan/Hapus dari Database)
@@ -306,5 +310,4 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
 
     </main>
   );
-        }
-          
+}
