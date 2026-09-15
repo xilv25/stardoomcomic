@@ -28,7 +28,7 @@ export default async function Home({
   // AMBIL DATA KONTROL ADMIN (PENGUMUMAN & SPONSOR)
   // =====================================================================
   let adminAnnouncements: any[] = [];
-  let adminAds: any[] = []; // <-- DIUBAH DARI adminSponsors MENJADI adminAds
+  let adminAds: any[] = []; 
   
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
@@ -36,12 +36,19 @@ export default async function Home({
     if (supabaseUrl && supabaseKey) {
       const supabaseDb = createClient(supabaseUrl, supabaseKey);
       
-      // Fetch Pengumuman
-      const { data: annData } = await supabaseDb.from('announcements').select('*').order('created_at', { ascending: false }).limit(2);
+      // Fetch Pengumuman (Ambil juga content dan id)
+      const { data: annData } = await supabaseDb
+        .from('announcements')
+        .select('id, title, content, image_url, date')
+        .order('created_at', { ascending: false })
+        .limit(2);
       if (annData) adminAnnouncements = annData;
       
-      // Fetch Iklan (Sponsor) - PERBAIKAN: Ganti tabel 'sponsors' menjadi 'ads'
-      const { data: spsData } = await supabaseDb.from('ads').select('*').order('created_at', { ascending: false });
+      // Fetch Iklan (Sponsor) - Ambil description
+      const { data: spsData } = await supabaseDb
+        .from('ads')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (spsData) adminAds = spsData;
     }
   } catch (e) {
@@ -175,6 +182,8 @@ export default async function Home({
       )}
 
       <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${isSearching ? 'mt-32' : (carouselMangas.length > 0 ? 'mt-6' : 'mt-32')}`}>
+        
+        {/* ================= SECTION PENGUMUMAN ================= */}
         {adminAnnouncements.length > 0 && (
           <section>
             <div className="flex justify-between items-end mb-3">
@@ -182,22 +191,38 @@ export default async function Home({
               <Link href="/pengumuman" className="text-[10px] text-gray-500 hover:text-gray-300">Semua</Link>
             </div>
             <div className="flex flex-col gap-3">
-              {adminAnnouncements.map((ann) => (
-                <div key={ann.id} className="flex gap-3 bg-[#111] border border-white/5 p-3 rounded-2xl items-center shadow-md">
-                  <div className="w-10 h-10 rounded-xl bg-red-900/20 shrink-0 flex items-center justify-center border border-red-900/40">
-                    <span className="text-red-800 font-extrabold text-lg">!</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-300 line-clamp-1">{ann.title}</span>
-                    <span className="text-[10px] text-gray-500 mt-1">{ann.date}</span>
-                  </div>
-                </div>
-              ))}
+              {adminAnnouncements.map((ann) => {
+                // Memotong isi teks pengumuman agar tidak terlalu panjang
+                const truncatedContent = ann.content && ann.content.length > 50 
+                  ? ann.content.substring(0, 50) + "..." 
+                  : ann.content;
+
+                return (
+                  <Link 
+                    key={ann.id} 
+                    href={`/pengumuman/${ann.id}`} // Link menuju detail pengumuman
+                    className="flex gap-3 bg-[#111] border border-white/5 p-3 rounded-2xl items-start shadow-md hover:bg-white/5 transition-colors group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-red-900/20 shrink-0 flex items-center justify-center border border-red-900/40 mt-0.5">
+                      <span className="text-red-800 font-extrabold text-lg">!</span>
+                    </div>
+                    <div className="flex flex-col flex-1">
+                      <div className="flex justify-between items-start gap-2">
+                         <span className="text-sm font-bold text-gray-200 line-clamp-1 group-hover:text-red-400 transition-colors">{ann.title}</span>
+                         <span className="text-[9px] text-gray-500 whitespace-nowrap pt-1">{ann.date}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-1 line-clamp-2 leading-snug">
+                        {truncatedContent} <span className="text-red-500 font-semibold italic">Baca selengkapnya</span>
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </section>
         )}
 
-        {/* PERBAIKAN MAPPING IKLAN/SPONSOR DI SINI */}
+        {/* ================= SECTION SPONSOR ================= */}
         {adminAds.length > 0 && (
           <section>
              <div className="flex justify-between items-end mb-3">
@@ -205,9 +230,28 @@ export default async function Home({
             </div>
             <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-3 pb-2 -mx-4 px-4">
               {adminAds.map((iklan) => (
-                <a key={iklan.id} href={iklan.link || '#'} target="_blank" rel="noreferrer" className="relative snap-center shrink-0 w-[280px] h-[120px] rounded-xl overflow-hidden border border-white/10 shadow-md">
-                  <img src={iklan.image_url} alt={iklan.title} className="w-full h-full object-cover" />
-                  <div className="absolute top-1 right-1 bg-black/60 backdrop-blur border border-white/10 text-[8px] text-gray-400 px-1 rounded">Ad</div>
+                <a 
+                  key={iklan.id} 
+                  href={iklan.link || '#'} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="relative snap-center shrink-0 w-[280px] h-[150px] rounded-xl overflow-hidden border border-white/10 shadow-md group"
+                >
+                  <img src={iklan.image_url} alt={iklan.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  
+                  {/* Overlay gradien bawah untuk memunculkan teks */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+                  
+                  {/* Label Ad di kanan atas */}
+                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur border border-white/10 text-[8px] text-gray-300 font-bold px-1.5 py-0.5 rounded">Ad</div>
+
+                  {/* Teks Judul & Deskripsi di kiri bawah */}
+                  <div className="absolute bottom-3 left-3 right-3 flex flex-col">
+                    <span className="text-[13px] font-extrabold text-white drop-shadow-md line-clamp-1">{iklan.title}</span>
+                    {iklan.description && (
+                      <span className="text-[10px] text-gray-300 line-clamp-1 mt-0.5 opacity-90">{iklan.description}</span>
+                    )}
+                  </div>
                 </a>
               ))}
             </div>
@@ -300,4 +344,4 @@ export default async function Home({
       </nav>
     </main>
   );
-                  }
+          }
