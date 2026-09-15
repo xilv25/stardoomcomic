@@ -12,51 +12,66 @@ export default function ReaderUI({
   const [scrollSpeed, setScrollSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
+  
+  // STATE BARU: VISUAL DEBUGGER UNTUK MELIHAT STATUS DATABASE DI LAYAR
+  const [historyStatus, setHistoryStatus] = useState<string | null>(null);
 
-      // 0. Rekam Otomatis Riwayat Baca ke Database Supabase (ANTI-GAGAL)
+  // 0. Rekam Otomatis Riwayat Baca ke Database Supabase (VISUAL DEBUG)
   useEffect(() => {
+    let isMounted = true;
+
     const saveReadingHistory = async () => {
       try {
+        setHistoryStatus("Memeriksa sesi login...");
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const userId = session.user.id;
-          
-          // 1. Cek apakah komik ini sudah pernah dibaca sebelumnya
-          const { data: existing } = await supabase
-            .from('reading_history')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('manga_slug', komik)
-            .maybeSingle();
-
-          if (existing) {
-            // 2. Kalau sudah ada, UPDATE chapter terakhirnya
-            await supabase.from('reading_history').update({
-              last_chapter_slug: chapter,
-              last_chapter_name: namaChapter,
-              cover_url: mangaData?.thumbnail_url || '',
-              updated_at: new Date()
-            }).eq('id', existing.id);
-          } else {
-            // 3. Kalau belum ada, INSERT riwayat baru
-            await supabase.from('reading_history').insert({
-              user_id: userId,
-              manga_slug: komik,
-              manga_title: judulKomik,
-              cover_url: mangaData?.thumbnail_url || '',
-              last_chapter_slug: chapter,
-              last_chapter_name: namaChapter
-            });
-          }
+        
+        if (!session?.user) {
+          setHistoryStatus("Gagal: Belum Login");
+          return;
         }
-      } catch (err) {
-        console.error("Gagal menyimpan riwayat baca:", err);
+
+        setHistoryStatus("Menyimpan ke database...");
+        const userId = session.user.id;
+        
+        // Payload rapi tanpa data kosong
+        const payloadData = {
+          user_id: userId,
+          manga_slug: komik,
+          manga_title: judulKomik || komik,
+          cover_url: mangaData?.thumbnail_url || '',
+          last_chapter_slug: chapter,
+          last_chapter_name: namaChapter || chapter,
+          updated_at: new Date()
+        };
+
+        const { error } = await supabase
+          .from('reading_history')
+          .upsert(payloadData, { onConflict: 'user_id, manga_slug' });
+
+        if (error) {
+          setHistoryStatus(`Error DB: ${error.message}`);
+          console.error("Supabase Error:", error);
+        } else {
+          setHistoryStatus("Riwayat Tersimpan ✅");
+          // Hilangkan notifikasi setelah 3 detik jika sukses
+          setTimeout(() => {
+            if (isMounted) setHistoryStatus(null);
+          }, 3000);
+        }
+      } catch (err: any) {
+        setHistoryStatus(`System Crash: ${err.message}`);
       }
     };
 
+    // Tunda 2 detik untuk memastikan seluruh variabel komik & chapter sudah terisi penuh
     if (komik && chapter) {
-      saveReadingHistory();
+      const timer = setTimeout(() => {
+        if (isMounted) saveReadingHistory();
+      }, 2000);
+      return () => clearTimeout(timer);
     }
+
+    return () => { isMounted = false; };
   }, [komik, chapter, judulKomik, namaChapter, mangaData]);
   
   // 1. Logika Hide Nav on Scroll & Deteksi Bawah
@@ -66,11 +81,9 @@ export default function ReaderUI({
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       
-      // Deteksi apakah sudah sampai ujung bawah (batas toleransi 150px)
       const scrolledToBottom = window.innerHeight + currentScrollY >= document.body.offsetHeight - 150;
       setIsAtBottom(scrolledToBottom);
 
-      // Sembunyikan navigasi jika scroll ke bawah, tampilkan jika ke atas
       if (currentScrollY > lastScrollY && currentScrollY > 100 && !scrolledToBottom) {
         setNavVisible(false);
         setShowSettings(false);
@@ -93,14 +106,14 @@ export default function ReaderUI({
         window.scrollBy(0, scrollSpeed);
         animationId = requestAnimationFrame(scroll);
       } else if (isAtBottom && isAutoScrolling) {
-        setIsAutoScrolling(false); // Otomatis berhenti kalau mentok bawah
+        setIsAutoScrolling(false);
         setNavVisible(true);
       }
     };
 
     if (isAutoScrolling) {
       animationId = requestAnimationFrame(scroll);
-      setNavVisible(false); // Otomatis Fullscreen saat play
+      setNavVisible(false);
     }
     
     return () => cancelAnimationFrame(animationId);
@@ -109,6 +122,13 @@ export default function ReaderUI({
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
       
+      {/* NOTIFIKASI VISUAL DEBUGGER DI LAYAR */}
+      {historyStatus && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-black/80 backdrop-blur-md border border-white/20 text-white px-5 py-2 text-[10px] font-bold rounded-full shadow-2xl animate-fade-in pointer-events-none">
+          {historyStatus}
+        </div>
+      )}
+
       {/* HEADER MELAYANG (TRANSPARAN) */}
       <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
         <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
@@ -165,7 +185,6 @@ export default function ReaderUI({
             💬 Diskusi Chapter
           </h3>
           
-          {/* Input Komentar Baru */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-8 focus-within:border-red-500/50 focus-within:bg-white/10 transition-all shadow-inner">
             <textarea 
               placeholder="Tulis teorimu di sini..." 
@@ -181,7 +200,6 @@ export default function ReaderUI({
             </div>
           </div>
           
-          {/* Daftar Komentar */}
           <div className="flex flex-col gap-6">
             <div className="flex gap-3">
                <div className="w-9 h-9 rounded-full bg-white/10 shrink-0 overflow-hidden"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Reader2" alt="Avatar"/></div>
@@ -202,7 +220,6 @@ export default function ReaderUI({
       {/* BOTTOM NAVIGATION (MELAYANG & TRANSPARAN) */}
       <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
         
-        {/* Tombol Kiri: Prev Chapter (Hilang kalau mentok bawah) */}
         <div className={`transition-opacity duration-300 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg">
@@ -211,10 +228,7 @@ export default function ReaderUI({
           ) : <div className="w-12 h-12"></div>}
         </div>
 
-        {/* PILL TENGAH (Menu & Auto Scroll) */}
         <div className="flex-1 relative flex justify-center">
-          
-          {/* Pop-up Pengaturan Kecepatan */}
           <div className={`absolute bottom-full mb-4 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl transition-all duration-300 origin-bottom ${showSettings ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
             <p className="text-[10px] font-bold text-gray-400 mb-2 text-center uppercase tracking-widest">Speed Scroll: {scrollSpeed}x</p>
             <input 
@@ -245,7 +259,6 @@ export default function ReaderUI({
           </div>
         </div>
 
-        {/* Tombol Kanan: Next Chapter (Hilang kalau mentok bawah) */}
         <div className={`transition-opacity duration-300 ${isAtBottom ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           {nextCh ? (
             <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]">
@@ -257,5 +270,4 @@ export default function ReaderUI({
       </div>
     </div>
   );
-                 }
-        
+}
