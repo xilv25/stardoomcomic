@@ -12,21 +12,22 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('pengumuman'); 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
-  // State Pengumuman
+  // ================= STATE: PENGUMUMAN =================
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
+  const [annList, setAnnList] = useState<any[]>([]);
   const annFileRef = useRef<HTMLInputElement>(null);
 
-  // State Iklan
+  // ================= STATE: IKLAN =================
   const [adTitle, setAdTitle] = useState('');
   const [adDesc, setAdDesc] = useState('');
   const [adLink, setAdLink] = useState('');
   const [adsList, setAdsList] = useState<any[]>([]);
   const adFileRef = useRef<HTMLInputElement>(null);
 
-  // State Roles
+  // ================= STATE: ROLES =================
   const [roleName, setRoleName] = useState('');
-  const [roleColor, setRoleColor] = useState('#8B0000'); // Default lebih gelap
+  const [roleColor, setRoleColor] = useState('#8B0000');
   const [rolesList, setRolesList] = useState<any[]>([]);
   const [usersWithRoles, setUsersWithRoles] = useState<any[]>([]);
   
@@ -36,6 +37,7 @@ export default function AdminDashboard() {
     timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' 
   });
 
+  // ================= INIT & PROTEKSI =================
   useEffect(() => {
     const initAdmin = async () => {
       try {
@@ -58,10 +60,11 @@ export default function AdminDashboard() {
 
         if (profile?.role === 'admin') {
           setIsAdmin(true);
+          fetchAnnouncements();
           fetchAds();
           fetchRolesAndUsers();
         } else {
-          alert('Akses Ditolak. Area ini dibatasi.');
+          alert('Akses Ditolak. Area ini dibatasi khusus Administrator.');
           router.push('/profile');
         }
       } catch (err) {
@@ -75,6 +78,7 @@ export default function AdminDashboard() {
     initAdmin();
   }, [router]);
 
+  // ================= UPLOAD HELPER =================
   const uploadImage = async (file: File) => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
@@ -82,6 +86,12 @@ export default function AdminDashboard() {
     if (error) throw error;
     const { data } = supabase.storage.from('admin-uploads').getPublicUrl(fileName);
     return data.publicUrl;
+  };
+
+  // ================= FUNGSI: PENGUMUMAN =================
+  const fetchAnnouncements = async () => {
+    const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+    if (data) setAnnList(data);
   };
 
   const handleAddAnnouncement = async (e: React.FormEvent) => {
@@ -92,7 +102,6 @@ export default function AdminDashboard() {
       const file = annFileRef.current?.files?.[0];
       if (file) imageUrl = await uploadImage(file);
 
-      // PERBAIKAN: Mengirimkan user_id jika diperlukan oleh tabel
       const { error } = await supabase.from('announcements').insert([{ 
         title: annTitle, 
         content: annContent,
@@ -105,13 +114,21 @@ export default function AdminDashboard() {
       alert('Pengumuman berhasil dipublikasikan.');
       setAnnTitle(''); setAnnContent('');
       if (annFileRef.current) annFileRef.current.value = '';
+      fetchAnnouncements();
     } catch (error: any) {
-      alert(`Gagal menyimpan pengumuman: ${error.message || 'Error tidak diketahui'}`);
+      alert(`Gagal menyimpan pengumuman: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm("Konfirmasi penghapusan pengumuman ini?")) return;
+    await supabase.from('announcements').delete().eq('id', id);
+    fetchAnnouncements();
+  };
+
+  // ================= FUNGSI: IKLAN / SPONSOR =================
   const fetchAds = async () => {
     const { data } = await supabase.from('ads').select('*').order('created_at', { ascending: false });
     if (data) setAdsList(data);
@@ -126,7 +143,6 @@ export default function AdminDashboard() {
       
       const imageUrl = await uploadImage(file);
       
-      // PERBAIKAN: Mengirimkan user_id jika diperlukan oleh tabel
       const { error } = await supabase.from('ads').insert([{ 
         title: adTitle, 
         description: adDesc, 
@@ -141,18 +157,19 @@ export default function AdminDashboard() {
       if (adFileRef.current) adFileRef.current.value = '';
       fetchAds();
     } catch (error: any) {
-      alert(`Gagal menyimpan sponsor: ${error.message || 'Error tidak diketahui'}`);
+      alert(`Gagal menyimpan sponsor: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteAd = async (id: string) => {
-    if (!confirm("Konfirmasi penghapusan data ini?")) return;
+    if (!confirm("Konfirmasi penghapusan sponsor ini?")) return;
     await supabase.from('ads').delete().eq('id', id);
     fetchAds();
   };
 
+  // ================= FUNGSI: ROLES & USERS =================
   const fetchRolesAndUsers = async () => {
     const { data: roles } = await supabase.from('roles').select('*');
     if (roles) setRolesList(roles);
@@ -192,6 +209,7 @@ export default function AdminDashboard() {
     fetchRolesAndUsers();
   };
 
+  // ================= UI RENDER =================
   if (loading) {
     return (
       <main className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-400 text-sm tracking-widest font-medium uppercase">
@@ -204,7 +222,7 @@ export default function AdminDashboard() {
 
   return (
     <main className="min-h-screen bg-[#020202] text-gray-300 pb-20 font-sans selection:bg-red-900/30">
-      {/* Header Minimalist & Professional */}
+      
       <header className="sticky top-0 z-50 px-4 py-4 flex items-center gap-4 bg-[#050505]/90 backdrop-blur-xl border-b border-white/5">
         <button 
           onClick={() => router.push('/profile')} 
@@ -245,36 +263,71 @@ export default function AdminDashboard() {
           
           {/* ================= TAB: PENGUMUMAN ================= */}
           {activeTab === 'pengumuman' && (
-            <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl animate-fade-in">
-              <div className="mb-6">
-                <h2 className="text-sm font-bold text-gray-200">Publikasi Pengumuman</h2>
-                <p className="text-[11px] text-gray-500 mt-1">Buat informasi publik yang akan ditampilkan di halaman utama.</p>
-              </div>
+            <div className="animate-fade-in flex flex-col gap-6">
               
-              <form onSubmit={handleAddAnnouncement} className="flex flex-col gap-5">
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-semibold text-gray-400">Judul Pengumuman</label>
-                  <input required value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white focus:outline-none focus:border-red-900/50 transition-colors" placeholder="Masukkan judul..." />
+              <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
+                <div className="mb-6">
+                  <h2 className="text-sm font-bold text-gray-200">Publikasi Pengumuman</h2>
+                  <p className="text-[11px] text-gray-500 mt-1">Buat informasi publik yang akan ditampilkan di halaman utama.</p>
                 </div>
                 
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-semibold text-gray-400">Isi / Keterangan</label>
-                  <textarea value={annContent} onChange={(e) => setAnnContent(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white focus:outline-none focus:border-red-900/50 transition-colors min-h-[120px] resize-y" placeholder="Detail pengumuman (mendukung teks panjang)..." />
+                <form onSubmit={handleAddAnnouncement} className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-semibold text-gray-400">Judul Pengumuman</label>
+                    <input required value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white focus:outline-none focus:border-red-900/50 transition-colors" placeholder="Masukkan judul..." />
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-semibold text-gray-400">Isi / Keterangan</label>
+                    <textarea required value={annContent} onChange={(e) => setAnnContent(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white focus:outline-none focus:border-red-900/50 transition-colors min-h-[120px] resize-y" placeholder="Detail pengumuman (mendukung teks panjang)..." />
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[11px] font-semibold text-gray-400">Lampiran Gambar (Opsional)</label>
+                    <input type="file" accept="image/*" ref={annFileRef} className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-gray-400 file:mr-3 file:py-1.5 file:px-4 file:rounded-md file:border-0 file:bg-white/10 file:text-white file:text-[11px] file:font-medium hover:file:bg-white/20 transition-all cursor-pointer" />
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-[10px] text-gray-500">Tanggal efektif: <span className="text-gray-300">{todayWIB}</span></span>
+                    <button type="submit" disabled={isSubmitting} className="bg-white/10 hover:bg-white/20 text-white px-6 py-2.5 rounded-lg text-[12px] font-bold transition-all disabled:opacity-50 border border-white/5">
+                      {isSubmitting ? 'Memproses...' : 'Publikasikan'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
+                <h3 className="text-xs font-semibold text-gray-400 mb-4 pb-3 border-b border-white/5">Arsip Pengumuman Aktif</h3>
+                <div className="flex flex-col gap-3">
+                  {annList.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-white/5 rounded-xl">
+                      <span className="text-[11px] text-gray-600">Belum ada pengumuman yang dipublikasikan.</span>
+                    </div>
+                  ) : (
+                    annList.map(ann => (
+                      <div key={ann.id} className="flex gap-4 items-center bg-[#111] p-3 rounded-xl border border-white/5">
+                        {ann.image_url ? (
+                          <div className="w-20 h-14 shrink-0 rounded-md overflow-hidden bg-black/50 border border-white/5">
+                            <img src={ann.image_url} alt="Cover" className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-20 h-14 shrink-0 rounded-md bg-white/5 border border-white/5 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <span className="text-[12px] font-semibold text-gray-200 truncate">{ann.title}</span>
+                          <span className="text-[10px] text-gray-500 truncate mt-0.5">{ann.date}</span>
+                        </div>
+                        <button onClick={() => handleDeleteAnnouncement(ann.id)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md bg-red-900/20 text-red-500 hover:bg-red-900/40 border border-red-900/30 transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
-                
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-semibold text-gray-400">Lampiran Media (Opsional)</label>
-                  <input type="file" accept="image/*" ref={annFileRef} className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-gray-400 file:mr-3 file:py-1.5 file:px-4 file:rounded-md file:border-0 file:bg-white/10 file:text-white file:text-[11px] file:font-medium hover:file:bg-white/20 transition-all cursor-pointer" />
-                </div>
-                
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-[10px] text-gray-500">Tanggal efektif: <span className="text-gray-300">{todayWIB}</span></span>
-                  <button type="submit" disabled={isSubmitting} className="bg-white/10 hover:bg-white/20 text-white px-6 py-2.5 rounded-lg text-[12px] font-bold transition-all disabled:opacity-50 border border-white/5">
-                    {isSubmitting ? 'Memproses...' : 'Publikasikan'}
-                  </button>
-                </div>
-              </form>
-            </section>
+              </section>
+            </div>
           )}
 
           {/* ================= TAB: IKLAN / SPONSOR ================= */}
@@ -332,81 +385,6 @@ export default function AdminDashboard() {
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
                           <span className="text-[12px] font-semibold text-gray-200 truncate">{ad.title}</span>
                           <a href={ad.link} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400/80 hover:text-blue-400 truncate mt-0.5">{ad.link}</a>
-                        </div>
-                        <button onClick={() => handleDeleteAd(ad.id)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md bg-red-900/20 text-red-500 hover:bg-red-900/40 border border-red-900/30 transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
-            </div>
-          )}
-
-          {/* ================= TAB: ROLES & USERS ================= */}
-          {activeTab === 'role' && (
-            <div className="animate-fade-in flex flex-col gap-6">
-              
-              <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
-                <div className="mb-6">
-                  <h2 className="text-sm font-bold text-gray-200">Konfigurasi Klasifikasi Peran</h2>
-                  <p className="text-[11px] text-gray-500 mt-1">Kelola jenis peran (roles) beserta atribut visualnya.</p>
-                </div>
-                
-                <form onSubmit={handleAddRole} className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-                  <div className="flex-1 w-full flex flex-col gap-2">
-                    <label className="text-[11px] font-semibold text-gray-400">Identitas Peran (Nama)</label>
-                    <input required value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-red-900/50" placeholder="admin, moderator, dll" />
-                  </div>
-                  
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <label className="text-[11px] font-semibold text-gray-400">Kode Warna</label>
-                    <div className="relative w-full sm:w-20 h-[42px] rounded-lg overflow-hidden border border-white/10 bg-[#111]">
-                      <input type="color" value={roleColor} onChange={(e) => setRoleColor(e.target.value)} className="absolute -top-2 -left-2 w-28 h-28 cursor-pointer" />
-                    </div>
-                  </div>
-
-                  <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 h-[42px] rounded-lg text-[12px] font-bold transition-all border border-white/5">
-                    Terapkan
-                  </button>
-                </form>
-
-                <div className="mt-6 flex flex-wrap gap-2">
-                  {rolesList.map(r => (
-                    <div key={r.name} className="flex items-center gap-2 pl-3 pr-1 py-1 rounded-md border border-white/5 bg-[#111]">
-                      <span className="w-2 h-2 rounded-sm shadow-sm" style={{ backgroundColor: r.color }}></span>
-                      <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wider">{r.name}</span>
-                      <button onClick={() => handleDeleteRole(r.name)} className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-white/5 ml-1 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 md:p-6 shadow-xl">
-                <h3 className="text-xs font-semibold text-gray-400 mb-4 pb-3 border-b border-white/5">Tinjauan Otoritas Pengguna</h3>
-                <div className="flex flex-col gap-2">
-                  {usersWithRoles.length === 0 ? (
-                     <div className="text-center py-6 border border-dashed border-white/5 rounded-xl">
-                      <span className="text-[11px] text-gray-600">Tidak ada pengguna dengan otoritas khusus.</span>
-                     </div>
-                  ) : usersWithRoles.map(u => {
-                    const roleObj = rolesList.find(r => r.name === u.role);
-                    const color = roleObj ? roleObj.color : '#555';
-                    
-                    return (
-                      <div key={u.id} className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex flex-col">
-                            <span className="text-[12px] font-semibold text-gray-200">{u.username || 'Pengguna Tanpa Nama'}</span>
-                            <div className="flex mt-1">
-                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: `${color}15`, color: color, border: `1px solid ${color}30` }}>
-                                {u.role}
-                              </span>
-                            </div>
-                          </div>
                         </div>
                         <button onClick={() => handleRemoveUserRole(u.id)} className="text-[10px] text-gray-400 hover:text-red-400 font-medium px-3 py-1.5 rounded-md hover:bg-red-900/10 transition-colors">
                           Demote
