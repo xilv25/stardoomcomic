@@ -13,26 +13,41 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-    // 0. Rekam Otomatis Riwayat Baca ke Database Supabase
+      // 0. Rekam Otomatis Riwayat Baca ke Database Supabase (ANTI-GAGAL)
   useEffect(() => {
     const saveReadingHistory = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
-        // HARUS ADA SESSION USER
         if (session?.user) {
-          const { error } = await supabase.from('reading_history').upsert({
-            user_id: session.user.id,
-            manga_slug: komik,
-            manga_title: judulKomik,
-            cover_url: mangaData?.thumbnail_url || '',
-            last_chapter_slug: chapter,
-            last_chapter_name: namaChapter,
-            updated_at: new Date()
-          }, { onConflict: 'user_id, manga_slug' });
+          const userId = session.user.id;
+          
+          // 1. Cek apakah komik ini sudah pernah dibaca sebelumnya
+          const { data: existing } = await supabase
+            .from('reading_history')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('manga_slug', komik)
+            .maybeSingle();
 
-          if (error) console.error("Error Simpan History:", error.message);
-          else console.log("✅ Riwayat Baca Tersimpan!");
+          if (existing) {
+            // 2. Kalau sudah ada, UPDATE chapter terakhirnya
+            await supabase.from('reading_history').update({
+              last_chapter_slug: chapter,
+              last_chapter_name: namaChapter,
+              cover_url: mangaData?.thumbnail_url || '',
+              updated_at: new Date()
+            }).eq('id', existing.id);
+          } else {
+            // 3. Kalau belum ada, INSERT riwayat baru
+            await supabase.from('reading_history').insert({
+              user_id: userId,
+              manga_slug: komik,
+              manga_title: judulKomik,
+              cover_url: mangaData?.thumbnail_url || '',
+              last_chapter_slug: chapter,
+              last_chapter_name: namaChapter
+            });
+          }
         }
       } catch (err) {
         console.error("Gagal menyimpan riwayat baca:", err);
@@ -43,7 +58,7 @@ export default function ReaderUI({
       saveReadingHistory();
     }
   }, [komik, chapter, judulKomik, namaChapter, mangaData]);
-
+  
   // 1. Logika Hide Nav on Scroll & Deteksi Bawah
   useEffect(() => {
     let lastScrollY = window.scrollY;
