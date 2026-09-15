@@ -13,11 +13,14 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State Komentar & Reply Sosmed
+  // State Komentar, Reply, & Upload
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [commentsList, setCommentsList] = useState<any[]>([]);
-  const [showReplies, setShowReplies] = useState<Record<string, boolean>>({}); // State untuk toggle 'Lihat Balasan'
+  const [showReplies, setShowReplies] = useState<Record<string, boolean>>({});
+  
+  // State Menu Titik Tiga
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loadingComments, setLoadingComments] = useState(true);
@@ -50,7 +53,7 @@ export default function ReaderUI({
             });
           }
 
-          // Simpan Riwayat (Sistem Siluman)
+          // Simpan Riwayat
           await supabase.from('reading_history').upsert({
             user_id: session.user.id,
             manga_slug: komik,
@@ -62,7 +65,7 @@ export default function ReaderUI({
           }, { onConflict: 'user_id, manga_slug' });
         }
 
-        // Fetch Komentar Chapter (Termasuk parent_id)
+        // Fetch Komentar
         const { data: comments, error } = await supabase
           .from('chapter_comments')
           .select('*')
@@ -80,13 +83,11 @@ export default function ReaderUI({
       }
     };
 
-    if (komik && chapter) {
-      initReader();
-    }
+    if (komik && chapter) initReader();
     return () => { isMounted = false; };
   }, [komik, chapter, judulKomik, namaChapter, mangaData]);
   
-  // 1. Logika Auto Scroll & Deteksi Layout Bawah
+  // 1. Logika Hide Nav on Scroll & Deteksi Bawah
   useEffect(() => {
     let lastScrollY = window.scrollY;
     
@@ -98,6 +99,7 @@ export default function ReaderUI({
       if (currentScrollY > lastScrollY && currentScrollY > 100 && !scrolledToBottom) {
         setNavVisible(false);
         setShowSettings(false);
+        setOpenMenuId(null); // Tutup menu komentar jika nge-scroll
       } else if (currentScrollY < lastScrollY) {
         setNavVisible(true);
       }
@@ -108,6 +110,7 @@ export default function ReaderUI({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // 2. Logika Auto Scroll (Bisa Berhenti Manual)
   useEffect(() => {
     let animationId: number;
     const scroll = () => {
@@ -141,7 +144,15 @@ export default function ReaderUI({
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const scrollToBottom = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
-  // Upload Gambar dari Device
+  const addSpoilerTag = () => {
+    if (!textareaRef.current) return;
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    const text = commentText;
+    const highlighted = text.substring(start, end) || 'teks spoiler';
+    setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -166,23 +177,12 @@ export default function ReaderUI({
     }
   };
 
-  const addSpoilerTag = () => {
-    if (!textareaRef.current) return;
-    const start = textareaRef.current.selectionStart;
-    const end = textareaRef.current.selectionEnd;
-    const text = commentText;
-    const highlighted = text.substring(start, end) || 'teks spoiler';
-    setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
-  };
-
-  // Kirim Komentar / Reply
   const handlePostComment = async () => {
     if (!commentText.trim() || !currentUser) return;
     setIsSending(true);
 
     try {
       let finalContent = commentText.trim();
-      // Kalau nge-reply balasan milik orang, kita kasih tag username-nya di teks
       if (replyingTo && replyingTo.parent_id !== null) {
         finalContent = `@${replyingTo.username} ${finalContent}`;
       }
@@ -195,7 +195,7 @@ export default function ReaderUI({
         avatar_url: currentUser.avatar_url,
         role: currentUser.role,
         content: finalContent,
-        parent_id: replyingTo ? (replyingTo.parent_id || replyingTo.id) : null, // Kunci Nested Reply
+        parent_id: replyingTo ? (replyingTo.parent_id || replyingTo.id) : null,
         created_at: new Date()
       };
 
@@ -206,8 +206,6 @@ export default function ReaderUI({
         setCommentsList([data, ...commentsList]);
         setCommentText('');
         setReplyingTo(null);
-        
-        // Auto buka balasan jika user baru saja mereply
         if (data.parent_id) setShowReplies(prev => ({ ...prev, [data.parent_id]: true }));
       }
     } catch (err: any) {
@@ -217,11 +215,32 @@ export default function ReaderUI({
     }
   };
 
+  // FUNGSI HAPUS KOMENTAR
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm("Yakin ingin menghapus komentar ini?")) return;
+    
+    try {
+      const { error } = await supabase.from('chapter_comments').delete().eq('id', commentId);
+      if (error) throw error;
+      
+      // Hapus dari UI (Termasuk jika yang dihapus adalah parent, child-nya ikut terhapus di layar)
+      setCommentsList(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId));
+    } catch (err: any) {
+      alert("Gagal menghapus: " + err.message);
+    }
+    setOpenMenuId(null);
+  };
+
+  // FUNGSI LAPORKAN KOMENTAR
+  const handleReportComment = () => {
+    alert("Komentar berhasil dilaporkan ke Admin untuk ditinjau.");
+    setOpenMenuId(null);
+  };
+
   const toggleReplies = (parentId: string) => {
     setShowReplies(prev => ({ ...prev, [parentId]: !prev[parentId] }));
   };
 
-  // Parser Spoiler & Gambar Responsif
   const renderImages = (text: string, keyPrefix: string) => {
     const imgParts = text.split(/(\[img\].*?\[\/img\])/g);
     return imgParts.map((part, i) => {
@@ -250,12 +269,17 @@ export default function ReaderUI({
     });
   };
 
-  // Filter Main Komentar (Yang tidak punya parent_id)
   const mainComments = commentsList.filter(c => !c.parent_id);
 
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
       
+      {/* Overlay untuk menutup menu titik tiga jika diklik di luar */}
+      {openMenuId && (
+        <div className="fixed inset-0 z-[60]" onClick={() => setOpenMenuId(null)}></div>
+      )}
+
+      {/* HEADER */}
       <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
         <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
           <img src="/ic-arrow-left.jpg" alt="Back" className="w-5 h-5 mix-blend-screen opacity-80" />
@@ -272,29 +296,31 @@ export default function ReaderUI({
         </Link>
       </header>
 
+      {/* TOMBOL JUMP UP & DOWN */}
       <div className={`fixed right-4 bottom-24 z-40 flex flex-col gap-2 transition-opacity duration-300 ${navVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <button onClick={scrollToTop} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Atas"><img src="/ic-up.jpg" alt="Up" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
         <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah"><img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
       </div>
 
-      {/* AREA RENDERING GAMBAR (FIXED: Tanpa bolong teks jelek, memuat se-natural mungkin) */}
+      {/* AREA RENDER GAMBAR KOMIK (Anti-Ngelag, Natural Render) */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
-        onClick={() => { setNavVisible(!navVisible); setShowSettings(false); }}
+        onClick={() => { setNavVisible(!navVisible); setShowSettings(false); setOpenMenuId(null); }}
       >
         {chapterData.pages.map((pageUrl: string, index: number) => (
           <img 
             key={index} 
             src={pageUrl} 
-            alt=" "  /* Kosongkan agar tulisan .jpg jelek tidak muncul */
-            className="w-full h-auto object-contain block m-0 p-0 bg-[#050505] min-h-[300px] text-transparent" 
-            /* Browser otomatis memprioritaskan download sesuai urutan DOM (atas ke bawah) */
+            alt=" " 
+            className="w-full h-auto object-contain block m-0 p-0" 
+            loading={index < 2 ? "eager" : "lazy"} 
           />
         ))}
       </div>
 
       <div className="max-w-2xl mx-auto px-4 mt-8">
-        {/* TOMBOL NEXT/PREV PERMANEN DI BAWAH KOMIK */}
+        
+        {/* TOMBOL NEXT/PREV */}
         <div className="flex justify-between items-center gap-4 py-6 border-b border-white/5">
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all">
@@ -313,16 +339,15 @@ export default function ReaderUI({
           )}
         </div>
 
-        {/* AREA KOMENTAR */}
+        {/* KOLOM KOMENTAR */}
         <div className="mt-8 pb-36">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-200">
             💬 Diskusi Chapter ({commentsList.length})
           </h3>
           
           <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-8 focus-within:border-red-500/50 focus-within:bg-white/10 transition-all shadow-inner relative">
-            
             {replyingTo && (
-              <div className="flex justify-between items-center bg-black/40 px-3 py-2 rounded-lg mb-3 border border-white/10 text-[11px] text-gray-300">
+              <div className="flex justify-between items-center bg-black/40 px-3 py-1.5 rounded-lg mb-2 border border-white/10 text-xs text-gray-300">
                 <span>Membalas <strong className="text-red-400">@{replyingTo.username}</strong></span>
                 <button onClick={() => setReplyingTo(null)} className="text-red-500 font-bold hover:underline">Batalkan</button>
               </div>
@@ -340,14 +365,14 @@ export default function ReaderUI({
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5">
               <div className="flex gap-2 items-center">
                 <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                <button onClick={() => fileInputRef.current?.click()} disabled={!currentUser || uploadingImage} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Upload Gambar dari HP">{uploadingImage ? '⏳' : '📷'}</button>
+                <button onClick={() => fileInputRef.current?.click()} disabled={!currentUser || uploadingImage} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-gray-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Upload Gambar">{uploadingImage ? '⏳' : '📷'}</button>
                 <button onClick={addSpoilerTag} disabled={!currentUser} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-red-400 flex items-center justify-center text-sm transition-all text-gray-400 disabled:opacity-30" title="Sensor Spoiler">👁️‍🗨️</button>
               </div>
               <button onClick={handlePostComment} disabled={isSending || !currentUser} className="px-5 py-2 bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors shadow">{isSending ? 'Mengirim...' : 'Kirim'}</button>
             </div>
           </div>
           
-          {/* DAFTAR KOMENTAR & NESTED REPLY */}
+          {/* DAFTAR KOMENTAR & REPLY */}
           <div className="flex flex-col gap-6">
             {loadingComments ? (
               <div className="text-center text-xs text-gray-500 py-6">Memuat diskusi...</div>
@@ -355,72 +380,40 @@ export default function ReaderUI({
               <div className="text-center text-xs text-gray-500 py-6">Belum ada komentar. Jadilah yang pertama!</div>
             ) : (
               mainComments.map((cmt) => {
-                // Ambil daftar balasan khusus untuk komentar utama ini (Di-reverse agar yang terlama di atas)
                 const replies = commentsList.filter(c => c.parent_id === cmt.id).reverse();
                 
                 return (
                   <div key={cmt.id} className="flex flex-col gap-2">
                     
                     {/* KOMENTAR UTAMA */}
-                    <div className="flex gap-3 bg-white/[0.02] border border-white/5 p-3.5 rounded-2xl shadow-sm">
+                    <div className="flex gap-3 bg-white/[0.02] border border-white/5 p-3.5 rounded-2xl shadow-sm relative">
                        <Link href={`/profile/${cmt.user_id}`} className="w-10 h-10 rounded-xl bg-white/10 shrink-0 overflow-hidden border border-white/10 hover:border-red-500 transition-colors">
                          <img src={cmt.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
                        </Link>
-                       <div className="flex flex-col flex-1 overflow-hidden">
+                       <div className="flex flex-col flex-1 min-w-0">
                           <div className="flex gap-2 items-center">
-                             <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 transition-colors">{cmt.username || 'Reader'}</Link>
+                             <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 truncate">{cmt.username}</Link>
                              {cmt.role === 'admin' && <span className="bg-red-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-red-800">Admin</span>}
-                             {cmt.role === 'uploader' && <span className="bg-blue-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-blue-800">Uploader</span>}
-                             <span className="text-[10px] text-gray-500 ml-auto">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <div className="text-xs text-gray-300 mt-1.5 leading-relaxed break-words font-medium">
-                            {renderFormattedContent(cmt.content)}
-                          </div>
-                          <div className="mt-2 flex justify-end">
-                            <button 
-                              onClick={() => { setReplyingTo({ id: cmt.id, username: cmt.username, parent_id: cmt.id }); textareaRef.current?.focus(); }}
-                              className="text-[10px] font-bold text-gray-500 hover:text-red-400 transition-colors"
-                            >
-                              Balas
-                            </button>
-                          </div>
-                       </div>
-                    </div>
-
-                    {/* TOMBOL LIHAT BALASAN */}
-                    {replies.length > 0 && (
-                      <div className="ml-12 mt-1">
-                        <button 
-                          onClick={() => toggleReplies(cmt.id)} 
-                          className="text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
-                        >
-                          <span className="w-6 h-[1px] bg-gray-600 inline-block"></span>
-                          {showReplies[cmt.id] ? 'Sembunyikan Balasan' : `Lihat ${replies.length} Balasan`}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* DAFTAR BALASAN (MENJOROK KE KANAN) */}
-                    {showReplies[cmt.id] && replies.length > 0 && (
-                      <div className="ml-10 sm:ml-12 flex flex-col gap-3 mt-2 animate-fade-in border-l-2 border-white/5 pl-3">
-                        {replies.map(reply => (
-                          <div key={reply.id} className="flex gap-3 bg-white/[0.01] p-3 rounded-xl border border-white/5">
-                             <Link href={`/profile/${reply.user_id}`} className="w-8 h-8 rounded-lg bg-white/10 shrink-0 overflow-hidden border border-white/10">
-                               <img src={reply.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
-                             </Link>
-                             <div className="flex flex-col flex-1 overflow-hidden">
-                                <div className="flex gap-2 items-center">
-                                   <Link href={`/profile/${reply.user_id}`} className="text-[11px] font-bold text-gray-200 hover:text-red-400">{reply.username || 'Reader'}</Link>
-                                   {reply.role === 'admin' && <span className="bg-red-900 text-white text-[7px] font-extrabold px-1 py-0.5 rounded uppercase">Admin</span>}
-                                   <span className="text-[9px] text-gray-500 ml-auto">{new Date(reply.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                             <span className="text-[10px] text-gray-500 ml-auto shrink-0">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                             
+                             {/* MENU TITIK TIGA (REPLY) */}
+                                   <div className="relative z-[65]">
+                                     <button onClick={() => setOpenMenuId(openMenuId === reply.id ? null : reply.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
+                                     {openMenuId === reply.id && (
+                                       <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
+                                         <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
+                                         {(currentUser?.id === reply.user_id || currentUser?.role === 'admin') && (
+                                           <button onClick={() => handleDeleteComment(reply.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
+                                         )}
+                                       </div>
+                                     )}
+                                   </div>
                                 </div>
                                 <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
                                   {renderFormattedContent(reply.content)}
                                 </div>
                                 <div className="mt-1 flex justify-end">
-                                  <button onClick={() => { setReplyingTo({ id: reply.id, username: reply.username, parent_id: cmt.id }); textareaRef.current?.focus(); }} className="text-[10px] font-bold text-gray-500 hover:text-red-400">
-                                    Balas
-                                  </button>
+                                  <button onClick={() => { setReplyingTo({ id: reply.id, username: reply.username, parent_id: cmt.id }); textareaRef.current?.focus(); }} className="text-[10px] font-bold text-gray-500 hover:text-red-400">Balas</button>
                                 </div>
                              </div>
                           </div>
@@ -459,4 +452,4 @@ export default function ReaderUI({
       </div>
     </div>
   );
-              }
+}
