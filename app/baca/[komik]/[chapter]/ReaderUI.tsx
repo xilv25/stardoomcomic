@@ -13,22 +13,20 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State Komentar, Reply, & Upload
+  // State yang sudah dibersihkan dari TypeScript Generics agar Vercel tidak bingung
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [commentsList, setCommentsList] = useState<any[]>([]);
-  const [showReplies, setShowReplies] = useState<Record<string, boolean>>({});
-  
-  // State Menu Titik Tiga
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  
+  const [showReplies, setShowReplies] = useState<any>({});
+  const [openMenuId, setOpenMenuId] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<any>(null);
+  const fileInputRef = useRef<any>(null);
 
   // 0. Ambil Session User & Load Komentar Asli
   useEffect(() => {
@@ -99,7 +97,7 @@ export default function ReaderUI({
       if (currentScrollY > lastScrollY && currentScrollY > 100 && !scrolledToBottom) {
         setNavVisible(false);
         setShowSettings(false);
-        setOpenMenuId(null); // Tutup menu komentar jika nge-scroll
+        setOpenMenuId(null);
       } else if (currentScrollY < lastScrollY) {
         setNavVisible(true);
       }
@@ -153,7 +151,7 @@ export default function ReaderUI({
     setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!currentUser) return alert("Silakan login terlebih dahulu!");
@@ -206,7 +204,9 @@ export default function ReaderUI({
         setCommentsList([data, ...commentsList]);
         setCommentText('');
         setReplyingTo(null);
-        if (data.parent_id) setShowReplies(prev => ({ ...prev, [data.parent_id]: true }));
+        if (data.parent_id) {
+          setShowReplies(prev => ({ ...prev, [data.parent_id]: true }));
+        }
       }
     } catch (err: any) {
       alert("Gagal mengirim komentar: " + err.message);
@@ -215,15 +215,11 @@ export default function ReaderUI({
     }
   };
 
-  // FUNGSI HAPUS KOMENTAR
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm("Yakin ingin menghapus komentar ini?")) return;
-    
     try {
       const { error } = await supabase.from('chapter_comments').delete().eq('id', commentId);
       if (error) throw error;
-      
-      // Hapus dari UI (Termasuk jika yang dihapus adalah parent, child-nya ikut terhapus di layar)
       setCommentsList(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId));
     } catch (err: any) {
       alert("Gagal menghapus: " + err.message);
@@ -231,7 +227,6 @@ export default function ReaderUI({
     setOpenMenuId(null);
   };
 
-  // FUNGSI LAPORKAN KOMENTAR
   const handleReportComment = () => {
     alert("Komentar berhasil dilaporkan ke Admin untuk ditinjau.");
     setOpenMenuId(null);
@@ -246,7 +241,7 @@ export default function ReaderUI({
     return imgParts.map((part, i) => {
       if (part.startsWith('[img]') && part.endsWith('[/img]')) {
         const url = part.replace('[img]', '').replace('[/img]', '');
-        return <img key={`${keyPrefix}-img-${i}`} src={url} alt=" " className="max-w-[200px] max-h-48 rounded-xl mt-2 object-cover border border-white/10 shadow-lg block" loading="lazy" />;
+        return <img key={`${keyPrefix}-img-${i}`} src={url} alt="Uploaded" className="max-w-[200px] max-h-48 rounded-xl mt-2 object-cover border border-white/10 shadow-lg block" loading="lazy" />;
       }
       return <span key={`${keyPrefix}-txt-${i}`}>{part}</span>;
     });
@@ -274,12 +269,10 @@ export default function ReaderUI({
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
       
-      {/* Overlay untuk menutup menu titik tiga jika diklik di luar */}
       {openMenuId && (
         <div className="fixed inset-0 z-[60]" onClick={() => setOpenMenuId(null)}></div>
       )}
 
-      {/* HEADER */}
       <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
         <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
           <img src="/ic-arrow-left.jpg" alt="Back" className="w-5 h-5 mix-blend-screen opacity-80" />
@@ -296,13 +289,11 @@ export default function ReaderUI({
         </Link>
       </header>
 
-      {/* TOMBOL JUMP UP & DOWN */}
       <div className={`fixed right-4 bottom-24 z-40 flex flex-col gap-2 transition-opacity duration-300 ${navVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <button onClick={scrollToTop} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Atas"><img src="/ic-up.jpg" alt="Up" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
         <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah"><img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
       </div>
 
-      {/* AREA RENDER GAMBAR KOMIK (Anti-Ngelag, Natural Render) */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); setOpenMenuId(null); }}
@@ -320,7 +311,6 @@ export default function ReaderUI({
 
       <div className="max-w-2xl mx-auto px-4 mt-8">
         
-        {/* TOMBOL NEXT/PREV */}
         <div className="flex justify-between items-center gap-4 py-6 border-b border-white/5">
           {prevCh ? (
             <Link href={`/baca/${komik}/${prevCh}`} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3.5 rounded-xl flex justify-center items-center gap-2 transition-all">
@@ -339,7 +329,6 @@ export default function ReaderUI({
           )}
         </div>
 
-        {/* KOLOM KOMENTAR */}
         <div className="mt-8 pb-36">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-200">
             💬 Diskusi Chapter ({commentsList.length})
@@ -372,7 +361,6 @@ export default function ReaderUI({
             </div>
           </div>
           
-          {/* DAFTAR KOMENTAR & REPLY */}
           <div className="flex flex-col gap-6">
             {loadingComments ? (
               <div className="text-center text-xs text-gray-500 py-6">Memuat diskusi...</div>
@@ -384,8 +372,6 @@ export default function ReaderUI({
                 
                 return (
                   <div key={cmt.id} className="flex flex-col gap-2">
-                    
-                    {/* KOMENTAR UTAMA */}
                     <div className="flex gap-3 bg-white/[0.02] border border-white/5 p-3.5 rounded-2xl shadow-sm relative">
                        <Link href={`/profile/${cmt.user_id}`} className="w-10 h-10 rounded-xl bg-white/10 shrink-0 overflow-hidden border border-white/10 hover:border-red-500 transition-colors">
                          <img src={cmt.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
@@ -394,62 +380,19 @@ export default function ReaderUI({
                           <div className="flex gap-2 items-center">
                              <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 truncate">{cmt.username}</Link>
                              {cmt.role === 'admin' && <span className="bg-red-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-red-800">Admin</span>}
+                             {cmt.role === 'uploader' && <span className="bg-blue-900 text-white text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border border-blue-800">Uploader</span>}
                              <span className="text-[10px] text-gray-500 ml-auto shrink-0">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                              
-                             {/* MENU TITIK TIGA (REPLY) */}
-                                   <div className="relative z-[65]">
-                                     <button onClick={() => setOpenMenuId(openMenuId === reply.id ? null : reply.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
-                                     {openMenuId === reply.id && (
-                                       <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
-                                         <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
-                                         {(currentUser?.id === reply.user_id || currentUser?.role === 'admin') && (
-                                           <button onClick={() => handleDeleteComment(reply.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
-                                         )}
-                                       </div>
-                                     )}
-                                   </div>
-                                </div>
-                                <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
-                                  {renderFormattedContent(reply.content)}
-                                </div>
-                                <div className="mt-1 flex justify-end">
-                                  <button onClick={() => { setReplyingTo({ id: reply.id, username: reply.username, parent_id: cmt.id }); textareaRef.current?.focus(); }} className="text-[10px] font-bold text-gray-500 hover:text-red-400">Balas</button>
-                                </div>
+                             <div className="relative z-[65]">
+                               <button onClick={() => setOpenMenuId(openMenuId === cmt.id ? null : cmt.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
+                               {openMenuId === cmt.id && (
+                                 <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
+                                   <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
+                                   {(currentUser?.id === cmt.user_id || currentUser?.role === 'admin') && (
+                                     <button onClick={() => handleDeleteComment(cmt.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
+                                   )}
+                                 </div>
+                               )}
                              </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
-        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
-          {prevCh ? (
-            <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg"><img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" /></Link>
-          ) : <div className="w-12 h-12"></div>}
-        </div>
-        <div className="flex-1 relative flex justify-center">
-          <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-full px-5 py-2.5 flex gap-4 sm:gap-5 items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
-            <button onClick={() => setShowSettings(!showSettings)} className="hover:opacity-100 opacity-70 transition-opacity" title="Pengaturan Scroll"><img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" /></button>
-            <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll"><img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} /></button>
-            <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark"><img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" /></button>
-            <div className="w-[1px] h-5 bg-white/20"></div>
-            <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik"><img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" /></Link>
-          </div>
-        </div>
-        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
-          {nextCh ? (
-            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]"><img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" /></Link>
-          ) : <div className="w-12 h-12"></div>}
-        </div>
-      </div>
-    </div>
-  );
-}
+                    
