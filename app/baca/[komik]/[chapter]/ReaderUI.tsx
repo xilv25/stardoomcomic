@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '../../../utils/supabase'; // Sesuaikan path utils supabase jika berbeda
+import { supabase } from '../../../utils/supabase';
 
 export default function ReaderUI({ 
   komik, chapter, chapterData, mangaData, prevCh, nextCh, judulKomik, namaChapter 
@@ -12,25 +12,18 @@ export default function ReaderUI({
   const [scrollSpeed, setScrollSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
-  
-  // STATE BARU: VISUAL DEBUGGER UNTUK MELIHAT STATUS DATABASE DI LAYAR
-  const [historyStatus, setHistoryStatus] = useState<string | null>(null);
 
-  // 0. Rekam Otomatis Riwayat Baca ke Database Supabase (VISUAL DEBUG)
+  // 0. Rekam Otomatis Riwayat Baca (Sistem Siluman / Tanpa Notif di Layar)
   useEffect(() => {
     let isMounted = true;
 
     const saveReadingHistory = async () => {
       try {
-        setHistoryStatus("Memeriksa sesi login...");
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (!session?.user) {
-          setHistoryStatus("Gagal: Belum Login");
-          return;
-        }
+        // Hentikan diam-diam kalau user belum login
+        if (!session?.user) return; 
 
-        setHistoryStatus("Menyimpan ke database...");
         const userId = session.user.id;
         
         // Payload rapi tanpa data kosong
@@ -48,18 +41,11 @@ export default function ReaderUI({
           .from('reading_history')
           .upsert(payloadData, { onConflict: 'user_id, manga_slug' });
 
-        if (error) {
-          setHistoryStatus(`Error DB: ${error.message}`);
-          console.error("Supabase Error:", error);
-        } else {
-          setHistoryStatus("Riwayat Tersimpan ✅");
-          // Hilangkan notifikasi setelah 3 detik jika sukses
-          setTimeout(() => {
-            if (isMounted) setHistoryStatus(null);
-          }, 3000);
-        }
-      } catch (err: any) {
-        setHistoryStatus(`System Crash: ${err.message}`);
+        if (error) console.error("Supabase Error:", error);
+        else console.log("Riwayat Tersimpan Diam-diam ✅");
+        
+      } catch (err) {
+        console.error("System Crash:", err);
       }
     };
 
@@ -122,13 +108,6 @@ export default function ReaderUI({
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
       
-      {/* NOTIFIKASI VISUAL DEBUGGER DI LAYAR */}
-      {historyStatus && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-black/80 backdrop-blur-md border border-white/20 text-white px-5 py-2 text-[10px] font-bold rounded-full shadow-2xl animate-fade-in pointer-events-none">
-          {historyStatus}
-        </div>
-      )}
-
       {/* HEADER MELAYANG (TRANSPARAN) */}
       <header className={`fixed top-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-50 flex justify-between gap-2 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : '-translate-y-[150%]'}`}>
         <Link href={`/manga/${komik}`} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all shrink-0">
