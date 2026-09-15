@@ -16,7 +16,7 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
   // State UI
   const [currentPage, setCurrentPage] = useState(1);
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // State untuk Menu Titik Tiga
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const chaptersPerPage = 25;
 
   useEffect(() => {
@@ -26,26 +26,30 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
         if (session?.user) {
           const userId = session.user.id;
 
-          // Cek Bookmark
+          // 1. Cek Bookmark
           const { data: bmData } = await supabase
             .from('bookmarks')
             .select('*')
             .eq('user_id', userId)
             .eq('manga_slug', slug)
-            .single();
+            .maybeSingle(); // Pakai maybeSingle supaya tidak error jika kosong
+          
           if (bmData) setIsBookmarked(true);
 
-          // Cek Riwayat Baca
-          const { data: histData } = await supabase
+          // 2. Cek Riwayat Baca (History)
+          const { data: histData, error: histError } = await supabase
             .from('reading_history')
             .select('*')
             .eq('user_id', userId)
             .eq('manga_slug', slug)
-            .single();
-          if (histData) setLastHistory(histData);
+            .maybeSingle();
+
+          if (!histError && histData) {
+            setLastHistory(histData);
+          }
         }
       } catch (err) {
-        console.error("Gagal memuat status user", err);
+        console.error("Gagal memuat status user:", err);
       } finally {
         setLoadingUser(false);
       }
@@ -54,7 +58,7 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
     fetchUserStatus();
   }, [slug]);
 
-  // Handle Bookmark
+  // Handle Bookmark (Simpan/Hapus dari Database)
   const handleBookmarkToggle = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -66,17 +70,28 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
     const userId = session.user.id;
 
     if (isBookmarked) {
-      await supabase.from('bookmarks').delete().eq('user_id', userId).eq('manga_slug', slug);
-      setIsBookmarked(false);
+      // Hapus dari bookmark
+      const { error } = await supabase
+        .from('bookmarks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('manga_slug', slug);
+
+      if (!error) setIsBookmarked(false);
     } else {
-      await supabase.from('bookmarks').insert([{
-        user_id: userId,
-        manga_slug: slug,
-        manga_title: manga.title,
-        cover_url: manga.thumbnail_url,
-        type: manga.type
-      }]);
-      setIsBookmarked(true);
+      // Tambah ke bookmark
+      const { error } = await supabase
+        .from('bookmarks')
+        .insert([{
+          user_id: userId,
+          manga_slug: slug,
+          manga_title: manga.title,
+          cover_url: manga.thumbnail_url,
+          type: manga.type
+        }]);
+
+      if (!error) setIsBookmarked(true);
+      else alert('Gagal menyimpan bookmark. Coba lagi.');
     }
   };
 
@@ -138,9 +153,7 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
           {/* Dropdown Menu Glassmorphism */}
           {isMenuOpen && (
             <>
-              {/* Overlay klik di luar untuk menutup menu */}
               <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)}></div>
-              
               <div className="absolute top-12 right-0 w-44 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl z-50 animate-fade-in">
                 <button onClick={handleShare} className="text-left px-4 py-3.5 text-xs font-bold text-gray-200 hover:bg-white/10 transition-colors border-b border-white/5">
                   Bagikan Komik
@@ -159,7 +172,6 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
 
       {/* HERO / INFO KOMIK */}
       <div className="px-4 flex gap-4 mt-2">
-        {/* Cover Kiri */}
         <div className="relative w-[120px] shrink-0 aspect-[2/3] rounded-xl overflow-hidden shadow-xl bg-gray-900 border border-white/5">
           <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover" />
           <div className="absolute top-0 left-0 bg-red-600 rounded-br-xl px-2 py-1 shadow-md">
@@ -167,13 +179,11 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
           </div>
         </div>
 
-        {/* Info Kanan */}
         <div className="flex flex-col justify-center gap-1.5 flex-1 overflow-hidden">
           <h1 className="text-xl font-bold text-gray-100 leading-tight line-clamp-3">{manga.title}</h1>
           <p className="text-sm text-gray-400 truncate">{manga.author || 'Unknown'}</p>
           
           <div className="flex flex-wrap gap-2 mt-1">
-            {/* BADGE TIPE SELALU MERAH */}
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-[#a31a1a] text-white border border-red-800 shadow-sm">
               {manga.type || 'Manga'}
             </span>
@@ -182,7 +192,6 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
             </span>
           </div>
 
-          {/* Genres (Menggunakan manga.genre dari array of strings) */}
           <div className="flex flex-wrap gap-1 mt-1">
             {manga.genre?.slice(0, 4).map((g: string, idx: number) => (
               <span key={idx} className="text-[9px] text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-full">
@@ -198,12 +207,10 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
         
         {/* BARIS UTAMA (MULAI BACA + BOOKMARK) */}
         <div className="flex gap-3">
-          {/* Tombol Mulai Baca (Tanpa tulisan chapter) */}
           <Link href={firstChapter ? `/baca/${slug}/${firstChapter.slug}` : '#'} className="flex-1 bg-[#a31a1a] hover:bg-red-800 transition-colors text-white font-bold rounded-xl flex items-center justify-center py-3.5 shadow-lg shadow-red-900/30">
             Mulai Baca
           </Link>
 
-          {/* Tombol Bookmark */}
           <button onClick={handleBookmarkToggle} disabled={loadingUser} className="w-14 h-14 bg-[#111] border border-white/5 hover:bg-white/5 transition-colors rounded-xl flex items-center justify-center shrink-0 shadow-md">
             {loadingUser ? (
               <span className="text-gray-500 text-xs">...</span>
@@ -228,12 +235,10 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
       <div className="px-4 mt-6">
         <div className="bg-[#111] border border-white/5 p-4 rounded-2xl shadow-sm">
           <h3 className="text-[13px] font-bold text-gray-100 mb-2">Sinopsis</h3>
-          {/* Menggunakan manga.description */}
           <p className={`text-[11px] text-gray-400 leading-relaxed whitespace-pre-line ${isSynopsisExpanded ? '' : 'line-clamp-3'}`}>
             {manga.description || "Tidak ada sinopsis yang tersedia."}
           </p>
           
-          {/* Tombol Baca Selengkapnya Muncul Jika Deskripsi Panjang */}
           {manga.description && manga.description.length > 150 && (
             <button 
               onClick={() => setIsSynopsisExpanded(!isSynopsisExpanded)} 
@@ -255,7 +260,6 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
           <span className="text-[10px] text-gray-500">{chapters.length} Total</span>
         </div>
 
-        {/* List Chapter Aktif */}
         {currentChapters.map((ch: any) => {
           const isLastRead = lastHistory?.last_chapter_slug === ch.slug;
           return (
@@ -269,7 +273,6 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
           )
         })}
 
-        {/* PAGINATION (1 2 3 4 < >) */}
         {totalPages > 1 && (
           <div className="flex justify-center items-center gap-2 mt-6">
             <button 
@@ -303,5 +306,5 @@ export default function MangaClient({ slug, manga, chapters }: { slug: string, m
 
     </main>
   );
-      }
-                
+        }
+          
