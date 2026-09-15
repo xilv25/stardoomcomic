@@ -3,32 +3,37 @@ import HomeHeader from './HomeHeader';
 import DonationPopup from './DonationPopup';
 import { createClient } from '@supabase/supabase-js';
 
-export default async function Home({ searchParams }: any) {
-  const resolvedSearch = await searchParams;
+// Ekstrak tipe data agar compiler Vercel (SWC) tidak bingung
+type PageProps = {
+  searchParams: Promise<{ q?: string; type?: string; page?: string }>;
+};
+
+export default async function Home(props: PageProps) {
+  const resolvedSearch = await props.searchParams;
   const searchQuery = resolvedSearch?.q || '';
   const activeTab = resolvedSearch?.type || 'semua';
   const currentPage = parseInt(resolvedSearch?.page || '1');
   const isSearching = !!searchQuery; 
 
-  let daftarKomik = [];
-  let carouselMangas = [];
-  let favMangas = [];
+  let daftarKomik: any[] = [];
+  let carouselMangas: any[] = [];
+  let favMangas: any[] = [];
   let apiError = false;
   let totalPages = 1;
   const ITEMS_PER_PAGE = 10; 
 
-  const MAKOTA_TOKEN = process.env.MAKOTA_API_TOKEN;
+  const MAKOTA_TOKEN = process.env.MAKOTA_API_TOKEN as string;
   const headers = { "Makota-API": MAKOTA_TOKEN };
 
   // =====================================================================
   // AMBIL DATA KONTROL ADMIN (PENGUMUMAN & SPONSOR)
   // =====================================================================
-  let adminAnnouncements = [];
-  let adminAds = []; 
+  let adminAnnouncements: any[] = [];
+  let adminAds: any[] = []; 
   
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
     if (supabaseUrl && supabaseKey) {
       const supabaseDb = createClient(supabaseUrl, supabaseKey);
       
@@ -64,7 +69,7 @@ export default async function Home({ searchParams }: any) {
 
     // 2. DATA DAFTAR UTAMA
     const urlParams = new URLSearchParams();
-    let mangas = [];
+    let mangas: any[] = [];
 
     if (isSearching) {
       urlParams.append('limit', ITEMS_PER_PAGE.toString());
@@ -94,7 +99,7 @@ export default async function Home({ searchParams }: any) {
     // 3. FETCH DETAIL UNTUK DAPAT 3 CHAPTER
     let detailedMangas = mangas;
     if (mangas.length > 0) {
-      detailedMangas = await Promise.all(mangas.map(async (m) => {
+      detailedMangas = await Promise.all(mangas.map(async (m: any) => {
         try {
           const detailRes = await fetch(`https://api.makota.asia/api/v1/manga/${m.slug}`, { headers, next: { revalidate: 60 } });
           const detailData = await detailRes.json();
@@ -106,26 +111,21 @@ export default async function Home({ searchParams }: any) {
       }));
     }
 
-    // Menggunakan string RegExp murni agar Vercel tidak error parsing
-    const chapterRegex = new RegExp('\\d+(\\.\\d+)?');
-
-    daftarKomik = detailedMangas.map((manga) => {
+    daftarKomik = detailedMangas.map((manga: any) => {
       let flag = "🇯🇵"; 
       const type = manga.type?.toLowerCase() || 'manga';
       if (type.includes("manhwa")) flag = "🇰🇷";
       if (type.includes("manhua")) flag = "🇨🇳";
 
-      let mappedChapters = [];
+      let mappedChapters: any[] = [];
       if (manga.chapters && Array.isArray(manga.chapters)) {
-        const sortedChapters = [...manga.chapters].sort((a, b) => {
-          const matchA = a.name.match(chapterRegex);
-          const matchB = b.name.match(chapterRegex);
-          const numA = parseFloat(matchA ? matchA[0] : "0");
-          const numB = parseFloat(matchB ? matchB[0] : "0");
+        const sortedChapters = [...manga.chapters].sort((a: any, b: any) => {
+          const numA = parseFloat(a.name.match(/\d+(\.\d+)?/)?.[0] || "0");
+          const numB = parseFloat(b.name.match(/\d+(\.\d+)?/)?.[0] || "0");
           return numB - numA; 
         });
 
-        mappedChapters = sortedChapters.slice(0, 3).map((ch) => ({
+        mappedChapters = sortedChapters.slice(0, 3).map((ch: any) => ({
           name: ch.name,
           slug: ch.slug,
           time: "Baru"
@@ -160,16 +160,13 @@ export default async function Home({ searchParams }: any) {
 
   const paginationArray = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
   
-  // Mengurangi template literals yang bikin Vercel error
-  let baseQuery = "?type=" + activeTab;
+  let baseQueryStr = "?type=" + activeTab;
   if (searchQuery) {
-    baseQuery += "&q=" + searchQuery;
+    baseQueryStr += "&q=" + searchQuery;
   }
-  
-  let tabQueryBase = "&page=1";
-  if (searchQuery) {
-    tabQueryBase = "&q=" + searchQuery + "&page=1";
-  }
+
+  const iconPrev = "<";
+  const iconNext = ">";
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans selection:bg-red-900/50 overflow-x-hidden relative">
@@ -307,10 +304,10 @@ export default async function Home({ searchParams }: any) {
         <h2 className="text-lg font-bold mb-4 text-gray-200">{isSearching ? 'Hasil Pencarian' : 'Update Terbaru'}</h2>
 
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          <Link prefetch={false} href={"/?type=semua" + tabQueryBase} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'semua' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Semua</Link>
-          <Link prefetch={false} href={"/?type=manhwa" + tabQueryBase} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'manhwa' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Manhwa</Link>
-          <Link prefetch={false} href={"/?type=manga" + tabQueryBase} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'manga' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Manga</Link>
-          <Link prefetch={false} href={"/?type=manhua" + tabQueryBase} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'manhua' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Manhua</Link>
+          <Link prefetch={false} href={`/?type=semua${searchQuery ? '&q='+searchQuery : ''}&page=1`} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'semua' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Semua</Link>
+          <Link prefetch={false} href={`/?type=manhwa${searchQuery ? '&q='+searchQuery : ''}&page=1`} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'manhwa' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Manhwa</Link>
+          <Link prefetch={false} href={`/?type=manga${searchQuery ? '&q='+searchQuery : ''}&page=1`} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'manga' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Manga</Link>
+          <Link prefetch={false} href={`/?type=manhua${searchQuery ? '&q='+searchQuery : ''}&page=1`} className={`shrink-0 px-5 py-2 rounded-lg font-bold text-xs transition-all ${activeTab === 'manhua' ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:text-gray-300'}`}>Manhua</Link>
         </div>
 
         {apiError && <div className="p-4 bg-red-900/10 border border-red-900/30 rounded-lg text-center text-sm text-red-800">Gagal mengambil data dari Makota API.</div>}
@@ -352,20 +349,20 @@ export default async function Home({ searchParams }: any) {
         {totalPages > 1 && (
           <div className="flex justify-center items-center gap-2 mt-10 mb-6">
             {currentPage > 1 && (
-              <Link prefetch={false} href={`${baseQuery}&page=${currentPage - 1}`} className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#111] border border-white/5 text-xs hover:bg-white/5 transition-all text-gray-400">
-                &lt;
+              <Link prefetch={false} href={`${baseQueryStr}&page=${currentPage - 1}`} className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#111] border border-white/5 text-xs hover:bg-white/5 transition-all text-gray-400">
+                {iconPrev}
               </Link>
             )}
             
             {paginationArray.map(pageNum => (
-              <Link prefetch={false} key={pageNum} href={`${baseQuery}&page=${pageNum}`} className={`w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === pageNum ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.5)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:bg-white/5'}`}>
+              <Link prefetch={false} key={pageNum} href={`${baseQueryStr}&page=${pageNum}`} className={`w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === pageNum ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.5)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:bg-white/5'}`}>
                 {pageNum}
               </Link>
             ))}
 
             {currentPage < totalPages && (
-              <Link prefetch={false} href={`${baseQuery}&page=${currentPage + 1}`} className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#111] border border-white/5 text-xs hover:bg-white/5 transition-all text-gray-400">
-                &gt;
+              <Link prefetch={false} href={`${baseQueryStr}&page=${currentPage + 1}`} className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#111] border border-white/5 text-xs hover:bg-white/5 transition-all text-gray-400">
+                {iconNext}
               </Link>
             )}
           </div>
@@ -377,5 +374,4 @@ export default async function Home({ searchParams }: any) {
           <img src="/ic-home.jpg" alt="Home" className="w-5 h-5 mb-1 mix-blend-screen" style={{ filter: 'drop-shadow(0 0 5px rgba(127,29,29,0.5)) sepia(1) hue-rotate(320deg) saturate(500%) brightness(0.7)' }} />
           <span className="text-[10px] font-bold">Home</span>
         </Link>
-        <Link prefetch={false} href="/explore" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
-          <img src="/ic-compas.
+        <Link prefetch={false} href="/explore" className="flex flex-col items-center te
