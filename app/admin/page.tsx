@@ -8,9 +8,11 @@ import Link from 'next/link';
 export default function AdminDashboard() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isOwner, setIsOwner] = useState(false); // Kasta tertinggi
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pengumuman'); 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('user');
   
   // State Pengumuman
   const [annTitle, setAnnTitle] = useState('');
@@ -25,12 +27,16 @@ export default function AdminDashboard() {
   const [adsList, setAdsList] = useState<any[]>([]);
   const adFileRef = useRef<HTMLInputElement>(null);
 
-  // State Roles
+  // State Roles & Otoritas
   const [roleName, setRoleName] = useState('');
   const [roleColor, setRoleColor] = useState('#ff0000');
   const [rolesList, setRolesList] = useState<any[]>([]);
   const [usersWithRoles, setUsersWithRoles] = useState<any[]>([]);
   
+  // State Assign Role ke User Baru
+  const [targetUsername, setTargetUsername] = useState('');
+  const [selectedRoleToAssign, setSelectedRoleToAssign] = useState('admin');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Tanggal Hari Ini (WIB)
@@ -41,24 +47,41 @@ export default function AdminDashboard() {
   // Proteksi & Load Data
   useEffect(() => {
     const initAdmin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return router.push('/login');
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) return router.push('/login');
 
-      const userId = session.user.id;
-      setCurrentUserId(userId);
+        const userId = session.user.id;
+        setCurrentUserId(userId);
 
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
 
-      if (profile?.role === 'admin') {
-        setIsAdmin(true);
-        fetchAnnouncements();
-        fetchAds();
-        fetchRolesAndUsers();
-      } else {
-        alert('Akses Ditolak! Halaman ini khusus Admin.');
+        if (profileError) throw profileError;
+
+        const role = profile?.role?.toLowerCase() || 'user';
+        setCurrentUserRole(role);
+
+        if (role === 'admin' || role === 'owner') {
+          setIsAdmin(true);
+          if (role === 'owner') setIsOwner(true);
+          
+          fetchAnnouncements();
+          fetchAds();
+          fetchRolesAndUsers();
+        } else {
+          alert('Akses Ditolak! Halaman ini khusus Admin/Owner.');
+          router.push('/profile');
+        }
+      } catch (err) {
+        console.error("Init Error:", err);
         router.push('/profile');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAdmin();
@@ -68,8 +91,18 @@ export default function AdminDashboard() {
   const uploadImage = async (file: File) => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-    const { error } = await supabase.storage.from('admin-uploads').upload(fileName, file);
-    if (error) throw error;
+    
+    // Perbaikan potensi error upload
+    const { error: uploadError } = await supabase.storage.from('admin-uploads').upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+    
+    if (uploadError) {
+      console.error("Upload failed:", uploadError);
+      throw new Error(`Gagal upload gambar ke bucket. Pastikan bucket 'admin-uploads' ada dan Public. (${uploadError.message})`);
+    }
+    
     const { data } = supabase.storage.from('admin-uploads').getPublicUrl(fileName);
     return data.publicUrl;
   };
@@ -88,21 +121,30 @@ export default function AdminDashboard() {
       const file = annFileRef.current?.files?.[0];
       if (file) imageUrl = await uploadImage(file);
 
-      const { error } = await supabase.from('announcements').insert([{ 
+      // Coba insert tanpa user_id dulu (banyak kasus RLS conflict karena foreign key)
+      const insertData: any = { 
         title: annTitle, 
         content: annContent,
-        image_url: imageUrl,
-        date: todayWIB,
-        user_id: currentUserId 
-      }]);
+        date: todayWIB
+      };
+      if (imageUrl) insertData.image_url = imageUrl;
+      
+      const { error } = await supabase.from('announcements').insert([insertData]);
 
-      if (error) throw error;
+      if (error) {
+         // Jika gagal tanpa user_id, coba dengan user_id
+         console.warn("Insert gagal, mencoba dengan user_id...", error);
+         insertData.user_id = currentUserId;
+         const { error: retryError } = await supabase.from('announcements').insert([insertData]);
+         if (retryError) throw retryError;
+      }
+
       alert('Pengumuman berhasil di-publish!');
       setAnnTitle(''); setAnnContent('');
       if (annFileRef.current) annFileRef.current.value = '';
       fetchAnnouncements();
     } catch (error: any) {
-      alert('Gagal: ' + error.message);
+      alert('Gagal mempublish: ' + (error.message || JSON.stringify(error)));
     } finally {
       setIsSubmitting(false);
     }
@@ -128,21 +170,30 @@ export default function AdminDashboard() {
       if (!file) throw new Error("Gambar iklan wajib diisi!");
       
       const imageUrl = await uploadImage(file);
-      const { error } = await supabase.from('ads').insert([{ 
+      
+      // Fallback RLS
+      const insertData: any = { 
         title: adTitle, 
         description: adDesc, 
         link: adLink, 
-        image_url: imageUrl,
-        user_id: currentUserId
-      }]);
+        image_url: imageUrl
+      };
 
-      if (error) throw error;
+      const { error } = await supabase.from('ads').insert([insertData]);
+
+      if (error) {
+        console.warn("Insert gagal, mencoba dengan user_id...", error);
+        insertData.user_id = currentUserId;
+        const { error: retryError } = await supabase.from('ads').insert([insertData]);
+        if (retryError) throw retryError;
+      }
+
       alert('Iklan berhasil ditambahkan!');
       setAdTitle(''); setAdDesc(''); setAdLink('');
       if (adFileRef.current) adFileRef.current.value = '';
       fetchAds();
     } catch (error: any) {
-      alert('Gagal: ' + error.message);
+      alert('Gagal menambah iklan: ' + (error.message || JSON.stringify(error)));
     } finally {
       setIsSubmitting(false);
     }
@@ -154,10 +205,16 @@ export default function AdminDashboard() {
     fetchAds();
   };
 
-  // ---------------- FEATURE: ROLES ----------------
+  // ---------------- FEATURE: ROLES & ASSIGNMENT ----------------
   const fetchRolesAndUsers = async () => {
+    // Pastikan role OWNER selalu ada di list jika belum pernah dibuat
     const { data: roles } = await supabase.from('roles').select('*');
-    if (roles) setRolesList(roles);
+    if (roles) {
+      if (!roles.find(r => r.name.toLowerCase() === 'owner')) {
+        roles.unshift({ name: 'owner', color: '#ffcc00' }); // Kuning Gold untuk Owner
+      }
+      setRolesList(roles);
+    }
 
     const { data: users } = await supabase.from('profiles').select('id, username, role').neq('role', 'user');
     if (users) setUsersWithRoles(users);
@@ -167,11 +224,15 @@ export default function AdminDashboard() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('roles').upsert([{ 
-        name: roleName.toLowerCase(), color: roleColor 
-      }]);
+      const name = roleName.toLowerCase().trim();
+      if (name === 'owner' && !isOwner) {
+        throw new Error("Hanya OWNER yang dapat memodifikasi role OWNER.");
+      }
+
+      const { error } = await supabase.from('roles').upsert([{ name, color: roleColor }]);
       if (error) throw error;
-      alert('Role berhasil disimpan!');
+      
+      alert('Tipe Role berhasil disimpan!');
       setRoleName('');
       fetchRolesAndUsers();
     } catch (error: any) {
@@ -181,23 +242,80 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteRole = async (roleName: string) => {
-    if (!confirm(`Hapus role ${roleName}? (User dengan role ini akan tetap ada tapi kehilangan warnanya)`)) return;
-    await supabase.from('roles').delete().eq('name', roleName);
+  const handleDeleteRole = async (roleNameToDelete: string) => {
+    if (roleNameToDelete.toLowerCase() === 'owner') {
+      alert("Role OWNER adalah kasta tertinggi dan tidak dapat dihapus!");
+      return;
+    }
+    if (!confirm(`Hapus konfigurasi role ${roleNameToDelete}?`)) return;
+    
+    await supabase.from('roles').delete().eq('name', roleNameToDelete);
     fetchRolesAndUsers();
   };
 
-  const handleRemoveUserRole = async (userId: string) => {
-    if (!confirm("Copot role dari user ini (kembali jadi user biasa)?")) return;
-    await supabase.from('profiles').update({ role: 'user' }).eq('id', userId);
+  const handleAssignRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetUsername.trim()) return alert("Masukkan username target!");
+    setIsSubmitting(true);
+
+    try {
+      // 1. Cari user ID berdasarkan username
+      const { data: targetUser, error: searchError } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .ilike('username', targetUsername.trim())
+        .maybeSingle();
+
+      if (searchError || !targetUser) throw new Error("Pengguna tidak ditemukan dengan username tersebut.");
+
+      // 2. Proteksi Kasta (Hierarki)
+      const targetCurrentRole = targetUser.role?.toLowerCase() || 'user';
+      const roleToAssign = selectedRoleToAssign.toLowerCase();
+
+      if (targetCurrentRole === 'owner' && !isOwner) {
+        throw new Error("Admin biasa tidak bisa mengubah status seorang OWNER.");
+      }
+      if (roleToAssign === 'owner' && !isOwner) {
+        throw new Error("Hanya OWNER yang bisa mengangkat OWNER baru.");
+      }
+
+      // 3. Update Role
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ role: roleToAssign })
+        .eq('id', targetUser.id);
+
+      if (updateError) throw updateError;
+
+      alert(`Sukses! ${targetUsername} sekarang adalah ${roleToAssign.toUpperCase()}.`);
+      setTargetUsername('');
+      fetchRolesAndUsers();
+    } catch (error: any) {
+      alert(`Gagal assign role: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRemoveUserRole = async (targetId: string, targetCurrentRole: string) => {
+    // Proteksi Demote
+    if (targetCurrentRole.toLowerCase() === 'owner' && !isOwner) {
+      alert("Kamu bukan OWNER! Tidak bisa men-demote seorang OWNER.");
+      return;
+    }
+    
+    if (!confirm("Copot otoritas user ini dan kembalikan jadi user biasa?")) return;
+    
+    await supabase.from('profiles').update({ role: 'user' }).eq('id', targetId);
     fetchRolesAndUsers();
   };
 
-  if (loading) return <main className="min-h-screen bg-[#050505] flex items-center justify-center text-red-900 font-bold">Memverifikasi Otoritas...</main>;
+  // ================= UI RENDER =================
+  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 text-sm uppercase tracking-widest">Memverifikasi Akses...</div>;
   if (!isAdmin) return null;
 
   return (
-    <main className="min-h-screen bg-[#020202] text-gray-300 pb-20 font-sans selection:bg-red-900/30 relative">
+    <div className="min-h-screen bg-[#020202] text-gray-300 pb-20 font-sans selection:bg-red-900/30 relative">
       <div className="absolute top-0 w-full h-[30vh] bg-gradient-to-b from-red-900/10 to-[#020202] z-0 pointer-events-none"></div>
 
       <header className="relative z-10 px-4 py-4 flex items-center gap-4 bg-[#050505]/90 backdrop-blur-xl border-b border-white/5 sticky top-0">
@@ -205,7 +323,10 @@ export default function AdminDashboard() {
            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
         </button>
         <div className="flex flex-col">
-          <h1 className="text-sm font-bold text-gray-100 tracking-wide">SDC Command Center</h1>
+          <div className="flex items-center gap-2">
+             <h1 className="text-sm font-bold text-gray-100 tracking-wide">SDC Command Center</h1>
+             {isOwner && <span className="bg-yellow-500/20 text-yellow-500 text-[8px] px-1.5 py-0.5 rounded border border-yellow-500/30 font-black">OWNER</span>}
+          </div>
           <span className="text-[10px] text-gray-500 uppercase tracking-widest">System Administration</span>
         </div>
       </header>
@@ -350,15 +471,80 @@ export default function AdminDashboard() {
         {activeTab === 'role' && (
           <div className="animate-fade-in flex flex-col gap-6">
             
+            {/* 1. ASSIGN ROLE KE USER */}
+            <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 shadow-xl border-l-2 border-l-red-900">
+              <div className="mb-5">
+                <h2 className="text-sm font-bold text-gray-200">Angkat Pengurus (Assign Role)</h2>
+                <p className="text-[11px] text-gray-500 mt-1">Berikan otoritas khusus kepada pengguna terdaftar.</p>
+              </div>
+              
+              <form onSubmit={handleAssignRole} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-semibold text-gray-400">Username Target</label>
+                  <input required value={targetUsername} onChange={(e) => setTargetUsername(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white focus:outline-none focus:border-red-900/50" placeholder="Masukkan username persis..." />
+                </div>
+                
+                <div className="flex gap-3 items-end">
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <label className="text-[11px] font-semibold text-gray-400">Pilih Otoritas</label>
+                    <select value={selectedRoleToAssign} onChange={(e) => setSelectedRoleToAssign(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white focus:outline-none focus:border-red-900/50 appearance-none">
+                      {rolesList.map(r => (
+                        <option key={r.name} value={r.name}>{r.name.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <button type="submit" disabled={isSubmitting} className="h-[46px] px-6 bg-red-900/80 hover:bg-red-800 text-white font-bold rounded-lg transition-all text-[12px] border border-red-700/50">
+                    Eksekusi
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            {/* 2. DAFTAR PENGGUNA BEROTORITAS */}
+            <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 shadow-xl">
+              <h3 className="text-xs font-semibold text-gray-400 mb-4 pb-3 border-b border-white/5">Susunan Pengurus Aktif</h3>
+              <div className="flex flex-col gap-2">
+                {usersWithRoles.length === 0 ? <p className="text-[11px] text-gray-600 text-center py-4">Belum ada staf / pengurus.</p> : usersWithRoles.map(u => {
+                  const uRoleLower = u.role?.toLowerCase() || '';
+                  const roleObj = rolesList.find(r => r.name.toLowerCase() === uRoleLower);
+                  // Jika owner, force warna gold
+                  const color = uRoleLower === 'owner' ? '#ffcc00' : (roleObj ? roleObj.color : '#888');
+                  
+                  return (
+                    <div key={u.id} className={`flex justify-between items-center bg-[#111] p-3 rounded-lg border ${uRoleLower === 'owner' ? 'border-yellow-600/30' : 'border-white/5'}`}>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-bold text-white">{u.username || 'Anonim'}</span>
+                          {u.id === currentUserId && <span className="text-[8px] bg-white/10 px-1 py-0.5 rounded text-gray-400">(Kamu)</span>}
+                        </div>
+                        <div className="flex mt-1.5">
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-sm shadow-sm" style={{ backgroundColor: `${color}20`, color: color, border: `1px solid ${color}40` }}>
+                            {u.role}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Tombol Demote: Sembunyikan jika dia OWNER dan yg login bukan OWNER */}
+                      {(uRoleLower !== 'owner' || isOwner) && (
+                        <button onClick={() => handleRemoveUserRole(u.id, u.role)} className="text-[10px] text-gray-400 hover:text-red-400 font-medium px-3 py-1.5 rounded-md hover:bg-red-900/10 transition-colors border border-transparent hover:border-red-900/30">Demote</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* 3. BUAT TIPE ROLE BARU */}
             <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 shadow-xl">
               <div className="mb-5">
-                <h2 className="text-sm font-bold text-gray-200">Konfigurasi Peran</h2>
-                <p className="text-[11px] text-gray-500 mt-1">Setup identitas peran.</p>
+                <h2 className="text-sm font-bold text-gray-200">Konfigurasi Label Peran (Tag)</h2>
+                <p className="text-[11px] text-gray-500 mt-1">Buat jenis peran baru beserta warnanya.</p>
               </div>
               <form onSubmit={handleAddRole} className="flex gap-3 items-end">
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-[11px] font-semibold text-gray-400">Nama Role</label>
-                  <input required value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-red-900/50" placeholder="admin, dll" />
+                  <label className="text-[11px] font-semibold text-gray-400">Nama Role Baru</label>
+                  <input required value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full bg-[#111] border border-white/10 rounded-lg px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-red-900/50" placeholder="moderator, uploader, dll" />
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
                   <label className="text-[11px] font-semibold text-gray-400 text-center">Warna</label>
@@ -373,44 +559,27 @@ export default function AdminDashboard() {
 
               <div className="mt-5 flex flex-wrap gap-2">
                 {rolesList.map(r => (
-                  <div key={r.name} className="flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-md border border-white/5 bg-[#111]">
+                  <div key={r.name} className={`flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-md border bg-[#111] ${r.name.toLowerCase() === 'owner' ? 'border-yellow-600/30' : 'border-white/5'}`}>
                     <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: r.color }}></span>
-                    <span className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider">{r.name}</span>
-                    <button onClick={() => handleDeleteRole(r.name)} className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-white/5 ml-1 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
+                    <span className="text-[10px] font-bold text-gray-200 uppercase tracking-wider">{r.name}</span>
+                    
+                    {/* Cegah Hapus Role Owner */}
+                    {r.name.toLowerCase() !== 'owner' ? (
+                      <button onClick={() => handleDeleteRole(r.name)} className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-white/5 ml-1 transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      </button>
+                    ) : (
+                      <span className="w-5 ml-1"></span> // Spacer aja
+                    )}
                   </div>
                 ))}
               </div>
             </section>
-
-            <section className="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 shadow-xl">
-              <h3 className="text-xs font-semibold text-gray-400 mb-4 pb-3 border-b border-white/5">Otoritas Pengguna</h3>
-              <div className="flex flex-col gap-2">
-                {usersWithRoles.length === 0 ? <p className="text-[11px] text-gray-600 text-center py-4">Belum ada data.</p> : usersWithRoles.map(u => {
-                  const roleObj = rolesList.find(r => r.name === u.role);
-                  const color = roleObj ? roleObj.color : '#888';
-                  
-                  return (
-                    <div key={u.id} className="flex justify-between items-center bg-[#111] p-3 rounded-lg border border-white/5">
-                      <div className="flex flex-col">
-                        <span className="text-[12px] font-semibold text-white">{u.username || 'Anonim'}</span>
-                        <div className="flex mt-1">
-                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: `${color}15`, color: color, border: `1px solid ${color}30` }}>
-                            {u.role}
-                          </span>
-                        </div>
-                      </div>
-                      <button onClick={() => handleRemoveUserRole(u.id)} className="text-[10px] text-gray-400 hover:text-red-400 font-medium px-3 py-1.5 rounded-md hover:bg-red-900/10 transition-colors">Demote</button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+            
           </div>
         )}
 
       </div>
-    </main>
+    </div>
   );
-}
+                    }
