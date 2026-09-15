@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../../../utils/supabase';
 
 // ==========================================
-// 1. KOMPONEN GAMBAR ANTI-LAG & RETRY
+// 1. KOMPONEN GAMBAR ANTI-LAG & ANTI-GAP HITAM
 // ==========================================
 const ComicImage = ({ src, index }: { src: string, index: number }) => {
   const [loading, setLoading] = useState(true);
@@ -18,13 +18,13 @@ const ComicImage = ({ src, index }: { src: string, index: number }) => {
     setRetryCount(prev => prev + 1);
   };
 
-  // Tambahkan timestamp untuk membypass cache browser jika di-retry
   const imageSrc = retryCount > 0 ? `${src}${src.includes('?') ? '&' : '?'}retry=${retryCount}` : src;
 
   return (
-    <div className="relative w-full min-h-[60vh] sm:min-h-[80vh] flex flex-col items-center justify-center bg-[#050505]">
-      {/* SKELETON LOADING */}
-      {loading && !error && (
+    <div className={`relative w-full flex flex-col items-center justify-center m-0 p-0 ${loading || error ? 'min-h-[50vh] bg-[#050505]' : 'bg-transparent'}`}>
+      
+      {/* SKELETON LOADING (Hanya muncul saat loading) */}
+      {(loading && !error) && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-8 h-8 border-4 border-white/5 border-t-red-600 rounded-full animate-spin"></div>
         </div>
@@ -33,21 +33,22 @@ const ComicImage = ({ src, index }: { src: string, index: number }) => {
       {/* ERROR STATE & TOMBOL RELOAD */}
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0a0a0a] border-y border-white/5">
-          <span className="text-gray-500 text-[11px]">Gagal memuat halaman {index + 1} (Timeout)</span>
+          <span className="text-gray-500 text-[11px]">Gagal memuat bagian ini</span>
           <button onClick={handleRetry} className="px-4 py-2 bg-red-900/30 hover:bg-red-800 border border-red-900/50 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-colors shadow-lg">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-            Muat Ulang Gambar
+            Muat Ulang
           </button>
         </div>
       )}
 
       {/* GAMBAR UTAMA */}
+      {/* Catatan: h-0 ditambahkan saat loading agar tidak mengambil tempat, align-bottom mengatasi gap HTML */}
       <img
         src={imageSrc}
-        alt={`Halaman ${index + 1}`}
-        className={`w-full h-auto object-contain block m-0 p-0 transition-opacity duration-500 ${loading ? 'opacity-0' : 'opacity-100'} ${error ? 'hidden' : 'block'}`}
-        loading={index < 3 ? "eager" : "lazy"} // 3 gambar pertama langsung load, sisanya lazy
-        decoding="async" // Render di background agar tidak lag saat scrolling
+        alt={`Page ${index + 1}`}
+        className={`w-full h-auto block align-bottom m-0 p-0 ${loading ? 'opacity-0 h-0' : 'opacity-100 transition-opacity duration-300'} ${error ? 'hidden' : 'block'}`}
+        loading={index < 3 ? "eager" : "lazy"} 
+        decoding="async" 
         onLoad={() => setLoading(false)}
         onError={() => { setLoading(false); setError(true); }}
       />
@@ -99,7 +100,7 @@ export default function ReaderUI({
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [showSpoilerHelp, setShowSpoilerHelp] = useState(false); // Tooltip Bantuan Spoiler
+  const [showSpoilerHelp, setShowSpoilerHelp] = useState(false); // State Popup Bantuan Spoiler
 
   const textareaRef = useRef<any>(null);
   const fileInputRef = useRef<any>(null);
@@ -320,7 +321,10 @@ export default function ReaderUI({
     });
   };
 
-  // FORMAT KONTEN: Diperbarui dengan Spoiler tebal (blur-md)
+  // ==========================================
+  // FORMAT SPOILER (DIPERBAIKI)
+  // Blur dikurangi (blur-[4px]), overflow ditutup rapi
+  // ==========================================
   const renderFormattedContent = (text: string) => {
     const spoilerRegex = new RegExp('(\\[spoiler\\][\\s\\S]*?\\[/spoiler\\])', 'g');
     const spoilerParts = text.split(spoilerRegex);
@@ -329,8 +333,8 @@ export default function ReaderUI({
       if (part.startsWith('[spoiler]') && part.endsWith('[/spoiler]')) {
         const actualText = part.replace('[spoiler]', '').replace('[/spoiler]', '');
         return (
-          <span key={`spoiler-${i}`} className="bg-white/10 text-transparent hover:text-white px-2.5 py-1 rounded-md blur-md hover:blur-none transition-all duration-300 cursor-pointer border border-white/5 select-none hover:select-auto inline-block align-middle overflow-hidden group mb-1">
-            <span className="group-hover:opacity-100 opacity-0 transition-opacity">
+          <span key={`spoiler-${i}`} className="relative inline-block align-middle group cursor-pointer bg-white/10 px-2 py-0.5 rounded border border-white/10 select-none overflow-hidden mx-1">
+            <span className="blur-[4px] group-hover:blur-none transition-all duration-300 text-gray-300 group-hover:text-white inline-block">
               {renderImages(actualText, `innerspoiler-${i}`)}
             </span>
           </span>
@@ -372,7 +376,7 @@ export default function ReaderUI({
         <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah"><img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
       </div>
 
-      {/* RENDER HALAMAN KOMIK DENGAN SISTEM BARU */}
+      {/* RENDER HALAMAN KOMIK DENGAN SISTEM ANTI GAP HITAM */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); setOpenMenuId(null); }}
@@ -430,7 +434,6 @@ export default function ReaderUI({
             
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5 relative">
               
-              {/* TOMBOL TOOLBAR KOMENTAR BARU */}
               <div className="flex gap-2 items-center">
                 <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                 
@@ -445,20 +448,20 @@ export default function ReaderUI({
                 </button>
 
                 {/* Tombol Help (?) */}
-                <button onClick={() => setShowSpoilerHelp(!showSpoilerHelp)} className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors ml-1">
+                <button onClick={() => setShowSpoilerHelp(!showSpoilerHelp)} className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors ml-1 font-bold">
                   ?
                 </button>
 
-                {/* Popup Penjelasan Spoiler */}
+                {/* Popup Penjelasan Spoiler (Diperjelas) */}
                 {showSpoilerHelp && (
-                  <div className="absolute top-12 left-0 w-56 bg-black/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-xl shadow-2xl text-[10px] text-gray-300 z-10 animate-fade-in">
+                  <div className="absolute top-12 left-0 w-64 bg-black/95 backdrop-blur-xl border border-white/10 p-4 rounded-xl shadow-2xl text-[10px] text-gray-300 z-10 animate-fade-in">
                     <p className="font-bold text-white mb-2 text-xs">Cara Pakai Spoiler:</p>
-                    <ol className="list-decimal pl-3 space-y-1">
-                      <li>Ketik seluruh komentarmu di kotak teks.</li>
-                      <li>Blok (pilih) bagian teks yang mengandung bocoran cerita.</li>
-                      <li>Klik <span className="font-bold text-gray-100">ikon mata coret</span> di sebelah kiri.</li>
+                    <ol className="list-decimal pl-3 space-y-1.5 mb-2">
+                      <li>Ketik komentarmu. Blok (pilih) bagian teks rahasia, lalu klik <b>ikon mata coret</b>.</li>
+                      <li><b>Atau</b> klik ikon mata coret langsung, lalu <span className="text-red-400 font-bold">hapus dan ganti</span> tulisan <code className="bg-white/10 px-1 rounded">teks spoiler</code> yang muncul di dalam kurung siku dengan bocoran ceritamu.</li>
                     </ol>
-                    <button onClick={() => setShowSpoilerHelp(false)} className="mt-3 w-full py-1.5 bg-red-900/50 rounded-lg text-white font-bold hover:bg-red-900 transition-colors">Tutup</button>
+                    <p className="text-gray-500 italic text-[9px] mb-3">Contoh:<br/> [spoiler]Si rambut merah mati[/spoiler]</p>
+                    <button onClick={() => setShowSpoilerHelp(false)} className="w-full py-2 bg-red-900/50 rounded-lg text-white font-bold hover:bg-red-900 transition-colors">Paham!</button>
                   </div>
                 )}
               </div>
@@ -486,7 +489,6 @@ export default function ReaderUI({
                           <div className="flex gap-2 items-center">
                              <Link href={`/profile/${cmt.user_id}`} className="text-xs font-bold text-gray-200 hover:text-red-400 truncate">{cmt.username}</Link>
                              
-                             {/* ROLE BADGE DINAMIS UTAMA */}
                              <RoleBadge role={cmt.role} />
                              
                              <span className="text-[10px] text-gray-500 ml-auto shrink-0">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -496,7 +498,6 @@ export default function ReaderUI({
                                {openMenuId === cmt.id && (
                                  <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1 z-20">
                                    <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
-                                   {/* Owner dan Admin bisa hapus komentar apa saja */}
                                    {(currentUser?.id === cmt.user_id || currentUser?.role === 'admin' || currentUser?.role === 'owner') && (
                                      <button onClick={() => handleDeleteComment(cmt.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
                                    )}
@@ -535,7 +536,6 @@ export default function ReaderUI({
                                 <div className="flex gap-2 items-center">
                                    <Link href={`/profile/${reply.user_id}`} className="text-[11px] font-bold text-gray-200 hover:text-red-400 truncate">{reply.username}</Link>
                                    
-                                   {/* ROLE BADGE DINAMIS UNTUK BALASAN */}
                                    <RoleBadge role={reply.role} />
 
                                    <span className="text-[9px] text-gray-500 ml-auto shrink-0">{new Date(reply.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -596,4 +596,4 @@ export default function ReaderUI({
       </div>
     </div>
   );
-      }
+}
