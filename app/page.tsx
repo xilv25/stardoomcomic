@@ -28,18 +28,25 @@ export default async function Home({
   // AMBIL DATA KONTROL ADMIN (PENGUMUMAN & SPONSOR)
   // =====================================================================
   let adminAnnouncements: any[] = [];
-  let adminSponsors: any[] = [];
+  let adminAds: any[] = []; // <-- DIUBAH DARI adminSponsors MENJADI adminAds
+  
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
     if (supabaseUrl && supabaseKey) {
       const supabaseDb = createClient(supabaseUrl, supabaseKey);
+      
+      // Fetch Pengumuman
       const { data: annData } = await supabaseDb.from('announcements').select('*').order('created_at', { ascending: false }).limit(2);
       if (annData) adminAnnouncements = annData;
-      const { data: spsData } = await supabaseDb.from('sponsors').select('*');
-      if (spsData) adminSponsors = spsData;
+      
+      // Fetch Iklan (Sponsor) - PERBAIKAN: Ganti tabel 'sponsors' menjadi 'ads'
+      const { data: spsData } = await supabaseDb.from('ads').select('*').order('created_at', { ascending: false });
+      if (spsData) adminAds = spsData;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error("Error fetching admin data:", e);
+  }
 
   try {
     // 1. DATA CAROUSEL (Hero)
@@ -71,7 +78,7 @@ export default async function Home({
         totalPages = Math.ceil((listData.data.total || 0) / ITEMS_PER_PAGE);
       }
     } else {
-      urlParams.append('limit', '10'); // Dibatasi 10 agar fetching 3 chapter ringan
+      urlParams.append('limit', '10'); 
       if (activeTab !== 'semua') urlParams.append('type', activeTab);
       urlParams.append('page', currentPage.toString());
 
@@ -104,7 +111,6 @@ export default async function Home({
       if (type.includes("manhwa")) flag = "🇰🇷";
       if (type.includes("manhua")) flag = "🇨🇳";
 
-      // LOGIKA SORTING CHAPTER (Besar -> Kecil / Terbaru di atas)
       let mappedChapters: any[] = [];
       if (manga.chapters && Array.isArray(manga.chapters)) {
         const sortedChapters = [...manga.chapters].sort((a, b) => {
@@ -113,7 +119,6 @@ export default async function Home({
           return numB - numA; 
         });
 
-        // Ambil 3 Teratas Setelah Diurutkan
         mappedChapters = sortedChapters.slice(0, 3).map((ch: any) => ({
           name: ch.name,
           slug: ch.slug,
@@ -149,8 +154,6 @@ export default async function Home({
     <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans selection:bg-red-900/50 overflow-x-hidden relative">
       
       <DonationPopup />
-      
-      {/* HEADER DENGAN TOKEN API MAKO */}
       <HomeHeader activeTab={activeTab} />
 
       {!isSearching && currentPage === 1 && carouselMangas.length > 0 && (
@@ -194,15 +197,16 @@ export default async function Home({
           </section>
         )}
 
-        {adminSponsors.length > 0 && (
+        {/* PERBAIKAN MAPPING IKLAN/SPONSOR DI SINI */}
+        {adminAds.length > 0 && (
           <section>
              <div className="flex justify-between items-end mb-3">
               <h2 className="text-lg font-bold text-gray-200">Sponsor</h2>
             </div>
             <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-3 pb-2 -mx-4 px-4">
-              {adminSponsors.map((iklan) => (
-                <a key={iklan.id} href={iklan.link_url || iklan.link || '#'} target="_blank" rel="noreferrer" className="relative snap-center shrink-0 w-[280px] h-[120px] rounded-xl overflow-hidden border border-white/10 shadow-md">
-                  <img src={iklan.image_url || iklan.image} alt={iklan.title} className="w-full h-full object-cover" />
+              {adminAds.map((iklan) => (
+                <a key={iklan.id} href={iklan.link || '#'} target="_blank" rel="noreferrer" className="relative snap-center shrink-0 w-[280px] h-[120px] rounded-xl overflow-hidden border border-white/10 shadow-md">
+                  <img src={iklan.image_url} alt={iklan.title} className="w-full h-full object-cover" />
                   <div className="absolute top-1 right-1 bg-black/60 backdrop-blur border border-white/10 text-[8px] text-gray-400 px-1 rounded">Ad</div>
                 </a>
               ))}
@@ -243,7 +247,6 @@ export default async function Home({
                 </h3>
               </div>
               
-              {/* 3 CHAPTER TERBARU AKAN MUNCUL DI SINI DENGAN URUTAN TERBARU KE BAWAH */}
               {komik.chapters && komik.chapters.length > 0 && (
                 <div className="flex flex-col gap-1.5 mt-1">
                   {komik.chapters.map((ch: any, cIdx: number) => (
@@ -297,4 +300,4 @@ export default async function Home({
       </nav>
     </main>
   );
-}
+                  }
