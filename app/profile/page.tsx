@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { supabase } from '../utils/supabase';
+import { supabase } from '../utils/supabase'; // Sesuaikan path jika ini ada di folder /app/profile
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -49,7 +49,7 @@ export default function ProfilePage() {
         setUser({
           email: authUser.email,
           name: profile?.username || authUser.email?.split('@')[0],
-          role: profile?.role || 'user',
+          role: profile?.role?.toLowerCase() || 'user', // Memastikan huruf kecil agar mudah di cek
           avatar_url: profile?.avatar_url || '/ic-profile.jpg',
           cover_url: profile?.cover_url || '',
           bio: profile?.bio || 'Belum ada bio.',
@@ -109,16 +109,23 @@ export default function ProfilePage() {
             {/* INFO AVATAR & PROFIL (Overlapping Cover) */}
             <div className="px-5 pb-5 flex flex-col gap-4 -mt-10 relative z-10">
               <div className="flex items-end gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-black border-4 border-[#111] flex items-center justify-center shrink-0 overflow-hidden shadow-xl">
+                <div className={`w-20 h-20 rounded-2xl bg-black border-4 flex items-center justify-center shrink-0 overflow-hidden shadow-xl ${user.role === 'owner' ? 'border-yellow-600' : 'border-[#111]'}`}>
                   <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex flex-col overflow-hidden mb-1">
                   <h2 className="text-lg font-bold text-gray-100 truncate">{user.name}</h2>
                   {/* Email sudah disensor untuk keamanan */}
                   <p className="text-[10px] text-gray-400 truncate">{maskEmail(user.email)}</p>
-                  {user.role === 'admin' && (
-                    <span className="mt-1.5 bg-red-900 text-white text-[9px] font-extrabold px-2 py-0.5 rounded w-max uppercase border border-red-800 shadow-sm">Admin</span>
-                  )}
+                  
+                  {/* TAG/LENCANA ROLE PENGGUNA */}
+                  <div className="mt-1.5 flex gap-1">
+                    {user.role === 'owner' && (
+                      <span className="bg-yellow-500 text-black text-[9px] font-extrabold px-2 py-0.5 rounded w-max uppercase shadow-[0_0_10px_rgba(234,179,8,0.5)]">Owner</span>
+                    )}
+                    {user.role === 'admin' && (
+                      <span className="bg-red-900 text-white text-[9px] font-extrabold px-2 py-0.5 rounded w-max uppercase border border-red-800 shadow-sm">Admin</span>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -159,15 +166,17 @@ export default function ProfilePage() {
             <span className="text-gray-600 text-xs">▶</span>
           </Link>
 
-          {/* JEMBATAN MENU ADMIN (Hanya muncul jika role user adalah 'admin') */}
-          {user?.role === 'admin' && (
+          {/* JEMBATAN MENU ADMIN (PERBAIKAN LOGIKA: Muncul untuk 'admin' DAN 'owner') */}
+          {(user?.role === 'admin' || user?.role === 'owner') && (
             <>
-              <h3 className="text-[10px] font-bold text-red-600 mb-1 mt-6 uppercase tracking-wider ml-2">Admin Control</h3>
-              <Link href="/admin" className="flex items-center justify-between p-4 rounded-xl bg-red-950/20 border border-red-900/30 hover:bg-red-900/20 transition-colors shadow-[0_0_15px_rgba(127,29,29,0.1)]">
+              <h3 className={`text-[10px] font-bold ${user.role === 'owner' ? 'text-yellow-600' : 'text-red-600'} mb-1 mt-6 uppercase tracking-wider ml-2`}>
+                Command Center
+              </h3>
+              <Link href="/admin" className={`flex items-center justify-between p-4 rounded-xl transition-colors ${user.role === 'owner' ? 'bg-yellow-900/10 border border-yellow-900/30 hover:bg-yellow-900/20 shadow-[0_0_15px_rgba(234,179,8,0.05)]' : 'bg-red-950/20 border border-red-900/30 hover:bg-red-900/20 shadow-[0_0_15px_rgba(127,29,29,0.1)]'}`}>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-red-400">Dashboard Kontrol Admin</span>
+                  <span className={`text-xs font-bold ${user.role === 'owner' ? 'text-yellow-500' : 'text-red-400'}`}>Dashboard Kontrol Admin</span>
                 </div>
-                <span className="text-red-800 text-xs">▶</span>
+                <span className={`${user.role === 'owner' ? 'text-yellow-700' : 'text-red-800'} text-xs`}>▶</span>
               </Link>
             </>
           )}
@@ -195,4 +204,4 @@ export default function ProfilePage() {
 
     </main>
   );
-          }
+}
