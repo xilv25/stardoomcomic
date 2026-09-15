@@ -18,13 +18,31 @@ export default function HomeHeader({ activeTab = 'semua' }: { activeTab?: string
   const router = useRouter();
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Ambil Foto Profile User dari Supabase
+  // 1. Ambil Foto Profile User dari Supabase secara menyeluruh
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.user_metadata?.avatar_url) {
-          setAvatarUrl(session.user.user_metadata.avatar_url);
+        if (session?.user) {
+          const userId = session.user.id;
+          
+          // Cek 1: Coba ambil dari User Metadata (Kalau pakai fungsi Auth.update)
+          let foto = session.user.user_metadata?.avatar_url;
+          
+          // Cek 2: Coba ambil dari tabel database (Jika disave terpisah)
+          if (!foto) {
+            const { data: profile } = await supabase
+              .from('profiles') // <-- UBAH 'profiles' JIKA NAMA TABELMU BERBEDA (Misal: 'users')
+              .select('avatar_url') // <-- UBAH JIKA NAMA KOLOMMU BERBEDA
+              .eq('id', userId)
+              .maybeSingle();
+              
+            if (profile?.avatar_url) {
+              foto = profile.avatar_url;
+            }
+          }
+
+          if (foto) setAvatarUrl(foto);
         }
       } catch (error) {
         console.error("Gagal load profile:", error);
@@ -48,7 +66,6 @@ export default function HomeHeader({ activeTab = 'semua' }: { activeTab?: string
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       
-      // Ambil data lewat jembatan server actions.ts
       const data = await fetchSearchSuggest(query);
       
       if (data?.ok && data.data?.results) {
@@ -91,25 +108,26 @@ export default function HomeHeader({ activeTab = 'semua' }: { activeTab?: string
         
         <div className="relative w-full">
           <form onSubmit={handleSubmit} className="relative">
-            {/* INPUT SEARCH FULL KACA (Sesuai Gambarmu) */}
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+            
             <input 
               type="text" 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => { if (query.trim()) setShowDropdown(true); }}
               placeholder="Cari komik, manhwa, manga..." 
-              className="w-full bg-white/5 backdrop-blur-lg border border-red-900/50 text-white text-[13px] font-medium pl-5 pr-12 py-3.5 rounded-2xl focus:outline-none focus:border-red-500/80 focus:bg-white/10 transition-all shadow-[0_8px_30px_rgba(0,0,0,0.3)] placeholder:text-gray-300"
+              className="w-full bg-white/5 backdrop-blur-lg border border-red-900/50 text-white text-[13px] font-medium pl-10 pr-12 py-3.5 rounded-2xl focus:outline-none focus:border-red-500/80 focus:bg-white/10 transition-all shadow-[0_8px_30px_rgba(0,0,0,0.3)] placeholder:text-gray-300"
             />
             
-            {/* Tombol Search (Kaca Pembesar di Kanan) */}
             <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors cursor-pointer">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </button>
           </form>
 
-          {/* DROPDOWN LIVE SEARCH (GLASSMORPHISM) */}
           {showDropdown && (
-            <div className="absolute top-full left-0 w-full mt-3 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden z-50 flex flex-col animate-fade-in">
+            <div className="absolute top-full left-0 w-full mt-2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden z-50 flex flex-col animate-fade-in">
               {isSearching ? (
                 <div className="p-5 text-center text-xs text-gray-300 font-medium">Mencari...</div>
               ) : suggestions.length > 0 ? (
