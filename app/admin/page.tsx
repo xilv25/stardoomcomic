@@ -92,15 +92,14 @@ export default function AdminDashboard() {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
     
-    // Perbaikan potensi error upload
-    const { error: uploadError } = await supabase.storage.from('admin-uploads').upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
+    // Upload menggunakan path langsung
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('admin-uploads')
+      .upload(fileName, file);
     
     if (uploadError) {
-      console.error("Upload failed:", uploadError);
-      throw new Error(`Gagal upload gambar ke bucket. Pastikan bucket 'admin-uploads' ada dan Public. (${uploadError.message})`);
+      console.error("Storage Error Details:", uploadError);
+      throw new Error(`Gagal upload file ke bucket: ${uploadError.message}`);
     }
     
     const { data } = supabase.storage.from('admin-uploads').getPublicUrl(fileName);
@@ -121,30 +120,24 @@ export default function AdminDashboard() {
       const file = annFileRef.current?.files?.[0];
       if (file) imageUrl = await uploadImage(file);
 
-      // Coba insert tanpa user_id dulu (banyak kasus RLS conflict karena foreign key)
       const insertData: any = { 
         title: annTitle, 
         content: annContent,
-        date: todayWIB
+        date: todayWIB,
+        user_id: currentUserId 
       };
       if (imageUrl) insertData.image_url = imageUrl;
       
       const { error } = await supabase.from('announcements').insert([insertData]);
 
-      if (error) {
-         // Jika gagal tanpa user_id, coba dengan user_id
-         console.warn("Insert gagal, mencoba dengan user_id...", error);
-         insertData.user_id = currentUserId;
-         const { error: retryError } = await supabase.from('announcements').insert([insertData]);
-         if (retryError) throw retryError;
-      }
+      if (error) throw new Error(error.message);
 
       alert('Pengumuman berhasil di-publish!');
       setAnnTitle(''); setAnnContent('');
       if (annFileRef.current) annFileRef.current.value = '';
       fetchAnnouncements();
     } catch (error: any) {
-      alert('Gagal mempublish: ' + (error.message || JSON.stringify(error)));
+      alert('Gagal mempublish pengumuman: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -171,29 +164,24 @@ export default function AdminDashboard() {
       
       const imageUrl = await uploadImage(file);
       
-      // Fallback RLS
-      const insertData: any = { 
+      const insertData = { 
         title: adTitle, 
         description: adDesc, 
         link: adLink, 
-        image_url: imageUrl
+        image_url: imageUrl,
+        user_id: currentUserId
       };
 
       const { error } = await supabase.from('ads').insert([insertData]);
 
-      if (error) {
-        console.warn("Insert gagal, mencoba dengan user_id...", error);
-        insertData.user_id = currentUserId;
-        const { error: retryError } = await supabase.from('ads').insert([insertData]);
-        if (retryError) throw retryError;
-      }
+      if (error) throw new Error(error.message);
 
       alert('Iklan berhasil ditambahkan!');
       setAdTitle(''); setAdDesc(''); setAdLink('');
       if (adFileRef.current) adFileRef.current.value = '';
       fetchAds();
     } catch (error: any) {
-      alert('Gagal menambah iklan: ' + (error.message || JSON.stringify(error)));
+      alert('Gagal menambah iklan: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -207,11 +195,10 @@ export default function AdminDashboard() {
 
   // ---------------- FEATURE: ROLES & ASSIGNMENT ----------------
   const fetchRolesAndUsers = async () => {
-    // Pastikan role OWNER selalu ada di list jika belum pernah dibuat
     const { data: roles } = await supabase.from('roles').select('*');
     if (roles) {
       if (!roles.find(r => r.name.toLowerCase() === 'owner')) {
-        roles.unshift({ name: 'owner', color: '#ffcc00' }); // Kuning Gold untuk Owner
+        roles.unshift({ name: 'owner', color: '#ffcc00' }); 
       }
       setRolesList(roles);
     }
@@ -259,7 +246,6 @@ export default function AdminDashboard() {
     setIsSubmitting(true);
 
     try {
-      // 1. Cari user ID berdasarkan username
       const { data: targetUser, error: searchError } = await supabase
         .from('profiles')
         .select('id, role')
@@ -268,7 +254,6 @@ export default function AdminDashboard() {
 
       if (searchError || !targetUser) throw new Error("Pengguna tidak ditemukan dengan username tersebut.");
 
-      // 2. Proteksi Kasta (Hierarki)
       const targetCurrentRole = targetUser.role?.toLowerCase() || 'user';
       const roleToAssign = selectedRoleToAssign.toLowerCase();
 
@@ -279,7 +264,6 @@ export default function AdminDashboard() {
         throw new Error("Hanya OWNER yang bisa mengangkat OWNER baru.");
       }
 
-      // 3. Update Role
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ role: roleToAssign })
@@ -298,7 +282,6 @@ export default function AdminDashboard() {
   };
 
   const handleRemoveUserRole = async (targetId: string, targetCurrentRole: string) => {
-    // Proteksi Demote
     if (targetCurrentRole.toLowerCase() === 'owner' && !isOwner) {
       alert("Kamu bukan OWNER! Tidak bisa men-demote seorang OWNER.");
       return;
@@ -311,7 +294,14 @@ export default function AdminDashboard() {
   };
 
   // ================= UI RENDER =================
-  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 text-sm uppercase tracking-widest">Memverifikasi Akses...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 text-sm uppercase tracking-widest">
+        Memverifikasi Akses...
+      </div>
+    );
+  }
+  
   if (!isAdmin) return null;
 
   return (
@@ -508,7 +498,6 @@ export default function AdminDashboard() {
                 {usersWithRoles.length === 0 ? <p className="text-[11px] text-gray-600 text-center py-4">Belum ada staf / pengurus.</p> : usersWithRoles.map(u => {
                   const uRoleLower = u.role?.toLowerCase() || '';
                   const roleObj = rolesList.find(r => r.name.toLowerCase() === uRoleLower);
-                  // Jika owner, force warna gold
                   const color = uRoleLower === 'owner' ? '#ffcc00' : (roleObj ? roleObj.color : '#888');
                   
                   return (
@@ -525,7 +514,6 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       
-                      {/* Tombol Demote: Sembunyikan jika dia OWNER dan yg login bukan OWNER */}
                       {(uRoleLower !== 'owner' || isOwner) && (
                         <button onClick={() => handleRemoveUserRole(u.id, u.role)} className="text-[10px] text-gray-400 hover:text-red-400 font-medium px-3 py-1.5 rounded-md hover:bg-red-900/10 transition-colors border border-transparent hover:border-red-900/30">Demote</button>
                       )}
@@ -563,13 +551,12 @@ export default function AdminDashboard() {
                     <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: r.color }}></span>
                     <span className="text-[10px] font-bold text-gray-200 uppercase tracking-wider">{r.name}</span>
                     
-                    {/* Cegah Hapus Role Owner */}
                     {r.name.toLowerCase() !== 'owner' ? (
                       <button onClick={() => handleDeleteRole(r.name)} className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-white/5 ml-1 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                       </button>
                     ) : (
-                      <span className="w-5 ml-1"></span> // Spacer aja
+                      <span className="w-5 ml-1"></span>
                     )}
                   </div>
                 ))}
@@ -582,4 +569,4 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
-                    }
+}
