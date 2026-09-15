@@ -24,6 +24,7 @@ export default function HomeHeader({ activeTab = 'semua' }: { activeTab?: string
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     
+    // Tunggu 0.5 detik setelah user berhenti mengetik agar tidak spam API
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`https://api.makota.asia/api/v1/manga/search?q=${encodeURIComponent(query)}&limit=5`);
@@ -35,7 +36,7 @@ export default function HomeHeader({ activeTab = 'semua' }: { activeTab?: string
         console.error(e);
       }
       setIsSearching(false);
-    }, 500); // Tunggu 0.5 detik setelah berhenti mengetik
+    }, 500); 
   }, [query]);
 
   const handleSubmit = (e: React.FormEvent) => {
