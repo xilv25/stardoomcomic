@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { supabase } from '../utils/supabase'; // Sesuaikan path jika ini ada di folder /app/profile
+import { supabase } from '../utils/supabase';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -49,7 +49,7 @@ export default function ProfilePage() {
         setUser({
           email: authUser.email,
           name: profile?.username || authUser.email?.split('@')[0],
-          role: profile?.role?.toLowerCase() || 'user', // Memastikan huruf kecil agar mudah di cek
+          role: profile?.role?.toLowerCase() || 'user', 
           avatar_url: profile?.avatar_url || '/ic-profile.jpg',
           cover_url: profile?.cover_url || '',
           bio: profile?.bio || 'Belum ada bio.',
@@ -96,7 +96,6 @@ export default function ProfilePage() {
         ) : (
           <div className="bg-[#111]/90 backdrop-blur-xl border border-white/10 rounded-3xl flex flex-col shadow-xl mb-6 overflow-hidden">
             
-            {/* COVER DI DALAM KOTAK PROFIL */}
             <div className="w-full h-28 bg-red-950/30 relative">
               {user.cover_url ? (
                 <img src={user.cover_url} alt="Cover" className="w-full h-full object-cover opacity-70" />
@@ -106,7 +105,6 @@ export default function ProfilePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-[#111]/90 to-transparent"></div>
             </div>
 
-            {/* INFO AVATAR & PROFIL (Overlapping Cover) */}
             <div className="px-5 pb-5 flex flex-col gap-4 -mt-10 relative z-10">
               <div className="flex items-end gap-4">
                 <div className={`w-20 h-20 rounded-2xl bg-black border-4 flex items-center justify-center shrink-0 overflow-hidden shadow-xl ${user.role === 'owner' ? 'border-yellow-600' : 'border-[#111]'}`}>
@@ -114,10 +112,8 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex flex-col overflow-hidden mb-1">
                   <h2 className="text-lg font-bold text-gray-100 truncate">{user.name}</h2>
-                  {/* Email sudah disensor untuk keamanan */}
                   <p className="text-[10px] text-gray-400 truncate">{maskEmail(user.email)}</p>
                   
-                  {/* TAG/LENCANA ROLE PENGGUNA */}
                   <div className="mt-1.5 flex gap-1">
                     {user.role === 'owner' && (
                       <span className="bg-yellow-500 text-black text-[9px] font-extrabold px-2 py-0.5 rounded w-max uppercase shadow-[0_0_10px_rgba(234,179,8,0.5)]">Owner</span>
@@ -140,7 +136,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* KOTAK STATISTIK (Dinamis dari Database) */}
         <div className="grid grid-cols-2 gap-3 mb-8">
           <div className="bg-[#111] border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center shadow-md">
             <span className="text-2xl font-extrabold text-gray-200">{user?.stats?.read || 0}</span>
@@ -154,7 +149,7 @@ export default function ProfilePage() {
 
         {/* MENU AKTIVITAS */}
         <div className="flex flex-col gap-2">
-          <h3 className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider ml-2">Aktivitas</h3>
+          <h3 className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider ml-2">Aktivitas & Aplikasi</h3>
           
           <Link href="/library" className="flex items-center justify-between p-4 rounded-xl bg-[#111] border border-white/5 hover:bg-white/5 transition-colors shadow-sm">
             <span className="text-xs font-bold text-gray-300">Riwayat Baca</span>
@@ -166,7 +161,21 @@ export default function ProfilePage() {
             <span className="text-gray-600 text-xs">▶</span>
           </Link>
 
-          {/* JEMBATAN MENU ADMIN (PERBAIKAN LOGIKA: Muncul untuk 'admin' DAN 'owner') */}
+          {/* TOMBOL UNDUH APLIKASI (APK) */}
+          <Link href="/download-app" className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-red-900/30 to-[#111] border border-red-900/40 hover:border-red-500/50 transition-all shadow-[0_0_15px_rgba(127,29,29,0.15)] group mt-2">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-red-900/40 flex items-center justify-center text-red-500 group-hover:text-white transition-colors border border-red-900/50">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-100">Unduh Aplikasi SDC</span>
+                <span className="text-[9px] text-gray-400">Install file APK secara langsung (Gratis)</span>
+              </div>
+            </div>
+            <span className="text-red-500 text-xs group-hover:translate-y-1 transition-transform">▼</span>
+          </Link>
+
+          {/* JEMBATAN MENU ADMIN */}
           {(user?.role === 'admin' || user?.role === 'owner') && (
             <>
               <h3 className={`text-[10px] font-bold ${user.role === 'owner' ? 'text-yellow-600' : 'text-red-600'} mb-1 mt-6 uppercase tracking-wider ml-2`}>
