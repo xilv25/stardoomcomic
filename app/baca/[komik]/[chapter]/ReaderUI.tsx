@@ -6,27 +6,26 @@ import { supabase } from '../../../utils/supabase';
 
 export default function ReaderUI({ 
   komik, chapter, chapterData, mangaData, prevCh, nextCh, judulKomik, namaChapter 
-}: any) {
+}) {
   const [navVisible, setNavVisible] = useState(true);
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const [scrollSpeed, setScrollSpeed] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // State Komentar
   const [commentText, setCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<any>(null);
-  const [commentsList, setCommentsList] = useState<any[]>([]);
-  const [showReplies, setShowReplies] = useState<any>({});
-  const [openMenuId, setOpenMenuId] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [commentsList, setCommentsList] = useState([]);
+  const [showReplies, setShowReplies] = useState({});
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  const textareaRef = useRef<any>(null);
-  const fileInputRef = useRef<any>(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -105,7 +104,7 @@ export default function ReaderUI({
   }, []);
 
   useEffect(() => {
-    let animationId: number;
+    let animationId;
     const scroll = () => {
       if (isAutoScrolling && !isAtBottom) {
         window.scrollBy(0, scrollSpeed);
@@ -146,7 +145,7 @@ export default function ReaderUI({
     setCommentText(text.substring(0, start) + `[spoiler]${highlighted}[/spoiler]` + text.substring(end));
   };
 
-  const handleImageUpload = async (e: any) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!currentUser) return alert("Silakan login terlebih dahulu!");
@@ -162,7 +161,7 @@ export default function ReaderUI({
 
       const { data: { publicUrl } } = supabase.storage.from('comment-images').getPublicUrl(filePath);
       setCommentText(prev => prev + `\n[img]${publicUrl}[/img]`);
-    } catch (err: any) {
+    } catch (err) {
       alert("Gagal mengunggah gambar: " + err.message);
     } finally {
       setUploadingImage(false);
@@ -200,23 +199,23 @@ export default function ReaderUI({
         setCommentText('');
         setReplyingTo(null);
         if (data.parent_id) {
-          setShowReplies((prev: any) => ({ ...prev, [data.parent_id]: true }));
+          setShowReplies(prev => ({ ...prev, [data.parent_id]: true }));
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       alert("Gagal mengirim komentar: " + err.message);
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
+  const handleDeleteComment = async (commentId) => {
     if (!confirm("Yakin ingin menghapus komentar ini?")) return;
     try {
       const { error } = await supabase.from('chapter_comments').delete().eq('id', commentId);
       if (error) throw error;
-      setCommentsList((prev: any[]) => prev.filter(c => c.id !== commentId && c.parent_id !== commentId));
-    } catch (err: any) {
+      setCommentsList(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId));
+    } catch (err) {
       alert("Gagal menghapus: " + err.message);
     }
     setOpenMenuId(null);
@@ -227,12 +226,11 @@ export default function ReaderUI({
     setOpenMenuId(null);
   };
 
-  const toggleReplies = (parentId: string) => {
-    setShowReplies((prev: any) => ({ ...prev, [parentId]: !prev[parentId] }));
+  const toggleReplies = (parentId) => {
+    setShowReplies(prev => ({ ...prev, [parentId]: !prev[parentId] }));
   };
 
-  // MENGGUNAKAN NEW REGEXP AGAR COMPILER VERCEL TIDAK ERROR
-  const renderImages = (text: string, keyPrefix: string) => {
+  const renderImages = (text, keyPrefix) => {
     const imgRegex = new RegExp('(\\[img\\][\\s\\S]*?\\[/img\\])', 'g');
     const imgParts = text.split(imgRegex);
     
@@ -245,7 +243,7 @@ export default function ReaderUI({
     });
   };
 
-  const renderFormattedContent = (text: string) => {
+  const renderFormattedContent = (text) => {
     const spoilerRegex = new RegExp('(\\[spoiler\\][\\s\\S]*?\\[/spoiler\\])', 'g');
     const spoilerParts = text.split(spoilerRegex);
     
@@ -264,7 +262,7 @@ export default function ReaderUI({
     });
   };
 
-  const mainComments = commentsList.filter((c: any) => !c.parent_id);
+  const mainComments = commentsList.filter(c => !c.parent_id);
 
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-red-900/50 pb-10 font-sans relative">
@@ -298,11 +296,11 @@ export default function ReaderUI({
         className="max-w-2xl mx-auto flex flex-col items-center pt-24 min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); setOpenMenuId(null); }}
       >
-        {chapterData.pages.map((pageUrl: string, index: number) => (
+        {chapterData.pages.map((pageUrl, index) => (
           <img 
             key={index} 
             src={pageUrl} 
-            alt=" " 
+            alt="Halaman Komik" 
             className="w-full h-auto object-contain block m-0 p-0" 
             loading={index === 0 || index === 1 ? "eager" : "lazy"} 
           />
@@ -395,7 +393,52 @@ export default function ReaderUI({
                                )}
                              </div>
                           </div>
-                         <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
+                          
+                          <div className="text-xs text-gray-300 mt-1.5 leading-relaxed break-words font-medium">
+                            {renderFormattedContent(cmt.content)}
+                          </div>
+                          
+                          <div className="mt-2 flex justify-end">
+                            <button onClick={() => { setReplyingTo({ id: cmt.id, username: cmt.username, parent_id: cmt.id }); textareaRef.current?.focus(); }} className="text-[10px] font-bold text-gray-500 hover:text-red-400">Balas</button>
+                          </div>
+                       </div>
+                    </div>
+
+                    {replies.length > 0 && (
+                      <div className="ml-12 mt-1">
+                        <button onClick={() => toggleReplies(cmt.id)} className="text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-2">
+                          <span className="w-6 h-[1px] bg-gray-600 inline-block"></span>
+                          {showReplies[cmt.id] ? 'Sembunyikan Balasan' : `Lihat ${replies.length} Balasan`}
+                        </button>
+                      </div>
+                    )}
+
+                    {showReplies[cmt.id] && replies.length > 0 && (
+                      <div className="ml-10 sm:ml-12 flex flex-col gap-3 mt-2 animate-fade-in border-l-2 border-white/5 pl-3">
+                        {replies.map((reply) => (
+                          <div key={reply.id} className="flex gap-3 bg-white/[0.01] p-3 rounded-xl border border-white/5 relative">
+                             <Link href={`/profile/${reply.user_id}`} className="w-8 h-8 rounded-lg bg-white/10 shrink-0 overflow-hidden border border-white/10">
+                               <img src={reply.avatar_url || '/ic-profile.jpg'} alt="Avatar" className="w-full h-full object-cover"/>
+                             </Link>
+                             <div className="flex flex-col flex-1 min-w-0">
+                                <div className="flex gap-2 items-center">
+                                   <Link href={`/profile/${reply.user_id}`} className="text-[11px] font-bold text-gray-200 hover:text-red-400 truncate">{reply.username}</Link>
+                                   {reply.role === 'admin' && <span className="bg-red-900 text-white text-[7px] font-extrabold px-1 py-0.5 rounded uppercase">Admin</span>}
+                                   <span className="text-[9px] text-gray-500 ml-auto shrink-0">{new Date(reply.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                                   
+                                   <div className="relative z-[65]">
+                                     <button onClick={() => setOpenMenuId(openMenuId === reply.id ? null : reply.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
+                                     {openMenuId === reply.id && (
+                                       <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
+                                         <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
+                                         {(currentUser?.id === reply.user_id || currentUser?.role === 'admin') && (
+                                           <button onClick={() => handleDeleteComment(reply.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
+                                         )}
+                                       </div>
+                                     )}
+                                   </div>
+                                </div>
+                                <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
                                   {renderFormattedContent(reply.content)}
                                 </div>
                                 <div className="mt-1 flex justify-end">
