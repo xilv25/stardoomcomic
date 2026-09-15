@@ -13,14 +13,16 @@ export default function ReaderUI({
   const [showSettings, setShowSettings] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
-  // 0. Rekam Otomatis Riwayat Baca ke Database Supabase
+    // 0. Rekam Otomatis Riwayat Baca ke Database Supabase
   useEffect(() => {
     const saveReadingHistory = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from('reading_history').upsert({
-            user_id: user.id,
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // HARUS ADA SESSION USER
+        if (session?.user) {
+          const { error } = await supabase.from('reading_history').upsert({
+            user_id: session.user.id,
             manga_slug: komik,
             manga_title: judulKomik,
             cover_url: mangaData?.thumbnail_url || '',
@@ -28,6 +30,9 @@ export default function ReaderUI({
             last_chapter_name: namaChapter,
             updated_at: new Date()
           }, { onConflict: 'user_id, manga_slug' });
+
+          if (error) console.error("Error Simpan History:", error.message);
+          else console.log("✅ Riwayat Baca Tersimpan!");
         }
       } catch (err) {
         console.error("Gagal menyimpan riwayat baca:", err);
