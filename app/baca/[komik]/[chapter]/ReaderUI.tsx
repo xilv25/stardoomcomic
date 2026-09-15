@@ -409,4 +409,15 @@ export default function ReaderUI({
         </div>
 
         {/* TOMBOL KANAN (NEXT): Menggunakan visibility:hidden agar ukuran ruang tetap ada & tidak getar */}
-      
+        <div className={`transition-opacity duration-300 ${isAtBottom ? 'invisible pointer-events-none' : 'visible opacity-100'}`}>
+          {nextCh ? (
+            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]">
+              <img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" />
+            </Link>
+          ) : <div className="w-12 h-12"></div>}
+        </div>
+
+      </div>
+    </div>
+  );
+}
