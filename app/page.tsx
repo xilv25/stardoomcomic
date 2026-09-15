@@ -36,7 +36,6 @@ export default async function Home({
     if (supabaseUrl && supabaseKey) {
       const supabaseDb = createClient(supabaseUrl, supabaseKey);
       
-      // Fetch Pengumuman (Ambil juga content dan id)
       const { data: annData } = await supabaseDb
         .from('announcements')
         .select('id, title, content, image_url, date')
@@ -44,7 +43,6 @@ export default async function Home({
         .limit(2);
       if (annData) adminAnnouncements = annData;
       
-      // Fetch Iklan (Sponsor) - Ambil description
       const { data: spsData } = await supabaseDb
         .from('ads')
         .select('*')
@@ -56,7 +54,7 @@ export default async function Home({
   }
 
   try {
-    // 1. DATA CAROUSEL (Hero)
+    // 1. DATA CAROUSEL & FAVORIT (Hero)
     if (!isSearching && currentPage === 1) {
       const resPopular = await fetch(`https://api.makota.asia/api/v1/manga/popular?limit=8`, {
         headers, next: { revalidate: 3600 }
@@ -64,7 +62,8 @@ export default async function Home({
       const popData = await resPopular.json();
       if (popData.ok && popData.data?.results) {
         carouselMangas = popData.data.results.slice(0, 5);
-        favMangas = popData.data.results.slice(5, 8);
+        // Mengisi favMangas (Komik Pilihan 1-3)
+        favMangas = popData.data.results.slice(5, 8); 
       }
     }
 
@@ -97,7 +96,7 @@ export default async function Home({
       }
     }
 
-    // 3. FETCH DETAIL UNTUK DAPAT 3 CHAPTER & SORT TERBARU
+    // 3. FETCH DETAIL UNTUK DAPAT 3 CHAPTER
     let detailedMangas = mangas;
     if (mangas.length > 0) {
       detailedMangas = await Promise.all(mangas.map(async (m: any) => {
@@ -163,6 +162,7 @@ export default async function Home({
       <DonationPopup />
       <HomeHeader activeTab={activeTab} />
 
+      {/* ================= SECTION CAROUSEL ================= */}
       {!isSearching && currentPage === 1 && carouselMangas.length > 0 && (
         <section className="relative w-full h-[55vh] sm:h-[60vh]">
           <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide h-full w-full">
@@ -181,18 +181,54 @@ export default async function Home({
         </section>
       )}
 
-      <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${isSearching ? 'mt-32' : (carouselMangas.length > 0 ? 'mt-6' : 'mt-32')}`}>
+      {/* ================= SECTION FAVORITE MANGAS (1-3) ================= */}
+      {!isSearching && currentPage === 1 && favMangas.length > 0 && (
+        <section className="px-4 max-w-xl mx-auto mt-6 relative z-10">
+          <div className="flex justify-between items-end mb-3">
+            <h2 className="text-lg font-bold text-gray-200">🔥 Terpopuler</h2>
+            {/* Tombol Lihat Semua menuju Explore */}
+            <Link href="/explore" className="text-[10px] text-gray-400 hover:text-white font-bold bg-[#111] px-2.5 py-1.5 rounded-md border border-white/10 transition-colors shadow-sm">
+              Lihat Semua
+            </Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-4 snap-x snap-mandatory">
+            {favMangas.map((manga, idx) => (
+              <Link 
+                prefetch={false} 
+                key={manga.slug} 
+                href={`/manga/${manga.slug}`} 
+                className="relative shrink-0 w-[140px] h-[200px] rounded-xl overflow-hidden shadow-lg snap-center group border border-white/5 bg-[#111]"
+              >
+                <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                
+                <div className="absolute top-2 left-2 w-6 h-6 bg-red-900/80 backdrop-blur-md rounded border border-red-500/50 flex items-center justify-center text-[10px] font-extrabold shadow">
+                  #{idx + 1}
+                </div>
+
+                <div className="absolute bottom-3 left-2 right-2 flex flex-col">
+                  <h3 className="text-[11px] font-bold text-white line-clamp-2 leading-tight drop-shadow-md">{manga.title}</h3>
+                  <span className="text-[9px] text-red-400 mt-1">{manga.type || 'Manga'}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${isSearching ? 'mt-32' : 'mt-6'}`}>
         
         {/* ================= SECTION PENGUMUMAN ================= */}
         {adminAnnouncements.length > 0 && (
           <section>
             <div className="flex justify-between items-end mb-3">
               <h2 className="text-lg font-bold text-gray-200">Pengumuman</h2>
-              <Link href="/pengumuman" className="text-[10px] text-gray-500 hover:text-gray-300">Semua</Link>
+              <Link href="/pengumuman" className="text-[10px] text-gray-500 hover:text-gray-300 bg-[#111] px-2.5 py-1.5 rounded-md border border-white/10 transition-colors shadow-sm">
+                Semua
+              </Link>
             </div>
             <div className="flex flex-col gap-3">
               {adminAnnouncements.map((ann) => {
-                // Memotong isi teks pengumuman agar tidak terlalu panjang
                 const truncatedContent = ann.content && ann.content.length > 50 
                   ? ann.content.substring(0, 50) + "..." 
                   : ann.content;
@@ -200,7 +236,7 @@ export default async function Home({
                 return (
                   <Link 
                     key={ann.id} 
-                    href={`/pengumuman/${ann.id}`} // Link menuju detail pengumuman
+                    href={`/pengumuman/${ann.id}`} 
                     className="flex gap-3 bg-[#111] border border-white/5 p-3 rounded-2xl items-start shadow-md hover:bg-white/5 transition-colors group"
                   >
                     <div className="w-10 h-10 rounded-xl bg-red-900/20 shrink-0 flex items-center justify-center border border-red-900/40 mt-0.5">
@@ -238,14 +274,8 @@ export default async function Home({
                   className="relative snap-center shrink-0 w-[280px] h-[150px] rounded-xl overflow-hidden border border-white/10 shadow-md group"
                 >
                   <img src={iklan.image_url} alt={iklan.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                  
-                  {/* Overlay gradien bawah untuk memunculkan teks */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-                  
-                  {/* Label Ad di kanan atas */}
                   <div className="absolute top-2 right-2 bg-black/60 backdrop-blur border border-white/10 text-[8px] text-gray-300 font-bold px-1.5 py-0.5 rounded">Ad</div>
-
-                  {/* Teks Judul & Deskripsi di kiri bawah */}
                   <div className="absolute bottom-3 left-3 right-3 flex flex-col">
                     <span className="text-[13px] font-extrabold text-white drop-shadow-md line-clamp-1">{iklan.title}</span>
                     {iklan.description && (
@@ -331,17 +361,4 @@ export default async function Home({
         </Link>
         <Link prefetch={false} href="/explore" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
           <img src="/ic-compas.jpg" alt="Explore" className="w-5 h-5 mb-1 opacity-50 mix-blend-screen" />
-          <span className="text-[10px] font-medium">Explore</span>
-        </Link>
-        <Link prefetch={false} href="/library" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
-          <svg className="w-5 h-5 mb-1 opacity-50 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-          <span className="text-[10px] font-medium">Library</span>
-        </Link>
-        <Link prefetch={false} href="/profile" className="flex flex-col items-center text-gray-600 hover:text-gray-400 pb-2 transition-colors">
-          <img src="/ic-profile.jpg" alt="Profile" className="w-5 h-5 mb-1 opacity-50 mix-blend-screen" />
-          <span className="text-[10px] font-medium">Profile</span>
-        </Link>
-      </nav>
-    </main>
-  );
-          }
+          <span className="text
