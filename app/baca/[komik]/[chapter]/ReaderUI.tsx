@@ -384,15 +384,58 @@ export default function ReaderUI({
                              <span className="text-[10px] text-gray-500 ml-auto shrink-0">{new Date(cmt.created_at).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                              
                              <div className="relative z-[65]">
-                               <button onClick={() => setOpenMenuId(openMenuId === cmt.id ? null : cmt.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
-                               {openMenuId === cmt.id && (
-                                 <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
-                                   <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
-                                   {(currentUser?.id === cmt.user_id || currentUser?.role === 'admin') && (
-                                     <button onClick={() => handleDeleteComment(cmt.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
-                                   )}
-                                 </div>
-                               )}
+                                     <button onClick={() => setOpenMenuId(openMenuId === reply.id ? null : reply.id)} className="text-gray-500 hover:text-white px-1">⋮</button>
+                                     {openMenuId === reply.id && (
+                                       <div className="absolute right-0 top-6 bg-[#111] border border-white/10 rounded-lg shadow-xl w-28 overflow-hidden text-xs py-1">
+                                         <button onClick={handleReportComment} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-white/5">Laporkan</button>
+                                         {(currentUser?.id === reply.user_id || currentUser?.role === 'admin') && (
+                                           <button onClick={() => handleDeleteComment(reply.id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-900/20 font-bold">Hapus</button>
+                                         )}
+                                       </div>
+                                     )}
+                                   </div>
+                                </div>
+                                <div className="text-[11px] text-gray-300 mt-1 leading-relaxed break-words">
+                                  {renderFormattedContent(reply.content)}
+                                </div>
+                                <div className="mt-1 flex justify-end">
+                                  <button onClick={() => { setReplyingTo({ id: reply.id, username: reply.username, parent_id: cmt.id }); textareaRef.current?.focus(); }} className="text-[10px] font-bold text-gray-500 hover:text-red-400">Balas</button>
+                                </div>
                              </div>
                           </div>
-                    
+                        ))}
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
+        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
+          {prevCh ? (
+            <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg"><img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" /></Link>
+          ) : <div className="w-12 h-12"></div>}
+        </div>
+        <div className="flex-1 relative flex justify-center">
+          <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-full px-5 py-2.5 flex gap-4 sm:gap-5 items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+            <button onClick={() => setShowSettings(!showSettings)} className="hover:opacity-100 opacity-70 transition-opacity" title="Pengaturan Scroll"><img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" /></button>
+            <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll"><img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} /></button>
+            <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark"><img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" /></button>
+            <div className="w-[1px] h-5 bg-white/20"></div>
+            <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik"><img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" /></Link>
+          </div>
+        </div>
+        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
+          {nextCh ? (
+            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]"><img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" /></Link>
+          ) : <div className="w-12 h-12"></div>}
+        </div>
+      </div>
+    </div>
+  );
+}
