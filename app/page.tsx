@@ -197,7 +197,7 @@ export default async function Home(props: PageProps) {
       {!isSearching && currentPage === 1 && favMangas.length > 0 && (
         <section className="px-4 max-w-xl mx-auto mt-6 relative z-10">
           <div className="flex justify-between items-end mb-3">
-            <h2 className="text-lg font-bold text-gray-200">🔥 Terpopuler</h2>
+            <h2 className="text-lg font-bold text-gray-200">Terpopuler</h2>
             <Link href="/explore" className="text-[10px] text-gray-400 hover:text-white font-bold bg-[#111] px-2.5 py-1.5 rounded-md border border-white/10 transition-colors shadow-sm">
               Lihat Semua
             </Link>
