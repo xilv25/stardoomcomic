@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import HomeHeader from './HomeHeader';
+import DonationPopup from './DonationPopup';
 import { createClient } from '@supabase/supabase-js';
 
 export default async function Home({ 
@@ -23,7 +24,7 @@ export default async function Home({
   const MAKOTA_TOKEN = process.env.MAKOTA_API_TOKEN as string;
 
   // =====================================================================
-  // AMBIL DATA KONTROL ADMIN DARI SUPABASE (Dibatasi 2 untuk Pengumuman)
+  // AMBIL DATA KONTROL ADMIN DARI SUPABASE
   // =====================================================================
   let adminAnnouncements: any[] = [];
   let adminSponsors: any[] = [];
@@ -35,26 +36,21 @@ export default async function Home({
     if (supabaseUrl && supabaseKey) {
       const supabaseDb = createClient(supabaseUrl, supabaseKey);
       
-      // Ambil maksimal 2 pengumuman terbaru saja supaya tidak menumpuk di homepage
-      const { data: annData } = await supabaseDb
-        .from('announcements')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(2);
+      const { data: annData } = await supabaseDb.from('announcements').select('*').order('created_at', { ascending: false }).limit(2);
       if (annData) adminAnnouncements = annData;
 
       const { data: spsData } = await supabaseDb.from('sponsors').select('*');
       if (spsData) adminSponsors = spsData;
     }
   } catch (e) {
-    // Fallback jika database belum merespons
+    // Fallback
   }
   // =====================================================================
 
   try {
     const headers = { "Makota-API": MAKOTA_TOKEN };
     
-    // 1. DATA CAROUSEL (Hero) & REKOMENDASI
+    // 1. DATA CAROUSEL (Hero)
     if (!isSearching && currentPage === 1) {
       const resPopular = await fetch(`https://api.makota.asia/api/v1/manga/popular?limit=8`, {
         headers, next: { revalidate: 3600 }
@@ -101,11 +97,22 @@ export default async function Home({
       }
     }
 
+    // MAPPING DATA TERMASUK 3 CHAPTER TERBARU
     daftarKomik = mangas.map((manga: any) => {
       let flag = "🇯🇵"; 
       const type = manga.type?.toLowerCase() || 'manga';
       if (type.includes("manhwa")) flag = "🇰🇷";
       if (type.includes("manhua")) flag = "🇨🇳";
+
+      // Ekstrak maksimal 3 chapter dari API Makota
+      let mappedChapters: any[] = [];
+      if (manga.chapters && Array.isArray(manga.chapters)) {
+        mappedChapters = manga.chapters.slice(0, 3).map((ch: any) => ({
+          name: ch.name || ch.chapter_name || ch.slug,
+          slug: ch.slug,
+          time: ch.time || ch.updated_on || "Baru"
+        }));
+      }
 
       return {
         title: manga.title,
@@ -114,11 +121,7 @@ export default async function Home({
         type: manga.type || 'Manga',
         flag: flag,
         isUp: true,
-        chapters: manga.chapters ? manga.chapters.slice(0, 2).map((ch: any) => ({
-          name: ch.name,
-          slug: ch.slug,
-          time: "Baru"
-        })) : []
+        chapters: mappedChapters
       };
     });
 
@@ -136,10 +139,11 @@ export default async function Home({
   return (
     <main className="min-h-screen bg-[#050505] text-white pb-32 font-sans selection:bg-red-900/50 overflow-x-hidden relative">
       
-      {/* HEADER TRANSPARAN */}
+      {/* POPUP DONASI */}
+      <DonationPopup />
+
       <HomeHeader activeTab={activeTab} />
 
-      {/* SECTION 1: HERO CAROUSEL MANHWA (Background Atas) */}
       {!isSearching && currentPage === 1 && carouselMangas.length > 0 && (
         <section className="relative w-full h-[40vh] sm:h-[50vh]">
           <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide h-full w-full">
@@ -158,11 +162,8 @@ export default async function Home({
         </section>
       )}
 
-      {/* KONTEN BAWAH */}
       {!isSearching && currentPage === 1 && (
         <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${carouselMangas.length > 0 ? 'mt-4' : 'mt-32'}`}>
-          
-          {/* SECTION 2: PENGUMUMAN (Dibatasi Maksimal 2) */}
           {adminAnnouncements.length > 0 && (
             <section>
               <div className="flex justify-between items-end mb-3">
@@ -185,7 +186,6 @@ export default async function Home({
             </section>
           )}
 
-          {/* SECTION 3: SPONSOR IKLAN ADMIN */}
           {adminSponsors.length > 0 && (
             <section>
                <div className="flex justify-between items-end mb-3">
@@ -201,46 +201,9 @@ export default async function Home({
               </div>
             </section>
           )}
-
-          {/* SECTION 4: REKOMENDASI */}
-          {favMangas.length > 0 && (
-            <section>
-              <div className="flex justify-between items-end mb-4">
-                <h2 className="text-lg font-bold text-gray-200">Rekomendasi</h2>
-                <Link href="/rekomendasi" className="text-[10px] text-red-700 font-bold hover:text-red-500 transition-colors">
-                  Lihat Selengkapnya
-                </Link>
-              </div>
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                {favMangas.map((manga, idx) => {
-                  let flag = "🇯🇵"; 
-                  if (manga.type?.toLowerCase().includes("manhwa")) flag = "🇰🇷";
-                  if (manga.type?.toLowerCase().includes("manhua")) flag = "🇨🇳";
-
-                  return (
-                    <Link prefetch={false} key={manga.slug} href={`/manga/${manga.slug}`} className="flex flex-col gap-1.5 group">
-                      <div className="relative rounded-xl overflow-hidden aspect-[2/3] border border-white/5 bg-[#111]">
-                        <img src={manga.thumbnail_url} alt={manga.title} className="w-full h-full object-cover grayscale-[20%] group-hover:scale-105 group-hover:grayscale-0 transition-all duration-500" loading="lazy" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/90 via-transparent to-transparent"></div>
-                        <div className="absolute top-1 left-1 bg-[#111]/80 backdrop-blur-md border border-white/10 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <span className="text-gray-400">#{idx + 1}</span>
-                        </div>
-                        <div className="absolute top-1 right-1 bg-[#111]/90 border border-white/5 text-xs px-1 rounded shadow">{flag}</div>
-                      </div>
-                      <h3 className="text-[11px] font-bold text-gray-300 line-clamp-2 leading-tight group-hover:text-gray-100 transition-colors">
-                        {manga.title}
-                      </h3>
-                    </Link>
-                  )
-                })}
-              </div>
-            </section>
-          )}
-
         </div>
       )}
 
-      {/* SECTION 5: DAFTAR UPDATE TERBARU / PENCARIAN */}
       <div className={`px-4 max-w-xl mx-auto ${isSearching ? 'mt-32' : 'mt-8'}`}>
         <h2 className="text-lg font-bold mb-4 text-gray-200">{isSearching ? 'Hasil Pencarian' : 'Update Terbaru'}</h2>
 
@@ -260,8 +223,8 @@ export default async function Home({
               <Link prefetch={false} href={`/manga/${komik.slug}`} className="relative rounded-lg overflow-hidden group aspect-[2/3] border border-white/5 bg-[#111]">
                 <img src={komik.cover} alt={komik.title} className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-500" loading="lazy" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
-                <div className="absolute bottom-2 right-2 bg-[#050505]/80 backdrop-blur-md border border-white/5 text-xs px-1.5 py-0.5 rounded shadow flex gap-1 items-center">
-                  <span className="text-[10px] text-gray-400 font-bold pr-1 border-r border-white/10">{komik.type}</span>
+                <div className="absolute bottom-2 right-2 bg-[#050505]/80 backdrop-blur-md border border-white/5 text-[9px] px-1.5 py-0.5 rounded shadow flex gap-1 items-center">
+                  <span className="text-gray-300 font-bold pr-1 border-r border-white/10">{komik.type}</span>
                   <span>{komik.flag}</span>
                 </div>
               </Link>
@@ -273,14 +236,17 @@ export default async function Home({
                 </h3>
               </div>
               
-              <div className="flex flex-col gap-1.5 mt-1">
-                {komik.chapters.map((ch: any, cIdx: number) => (
-                  <Link prefetch={false} key={cIdx} href={`/baca/${komik.slug}/${ch.slug}`} className="flex justify-between items-center bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-gray-200 text-[11px] font-medium px-2.5 py-2 rounded transition-all border border-transparent hover:border-red-900/30">
-                    <span className="truncate pr-2">{ch.name}</span>
-                    <span className="text-gray-600 text-[9px] whitespace-nowrap">{ch.time}</span>
-                  </Link>
-                ))}
-              </div>
+              {/* RENDER 3 CHAPTER TERBARU */}
+              {komik.chapters && komik.chapters.length > 0 && (
+                <div className="flex flex-col gap-1 mt-1">
+                  {komik.chapters.map((ch: any, cIdx: number) => (
+                    <Link prefetch={false} key={cIdx} href={`/baca/${komik.slug}/${ch.slug}`} className="flex justify-between items-center bg-[#111] hover:bg-red-900/20 text-gray-400 hover:text-gray-200 text-[10px] font-bold px-2.5 py-2 rounded-lg transition-all border border-white/5 hover:border-red-900/30">
+                      <span className="truncate pr-2">{ch.name}</span>
+                      <span className="text-gray-600 text-[9px] whitespace-nowrap">{ch.time}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -325,4 +291,4 @@ export default async function Home({
 
     </main>
   );
-        }
+      }
