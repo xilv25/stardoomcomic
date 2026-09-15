@@ -97,22 +97,12 @@ export default async function Home({
       }
     }
 
-    // MAPPING DATA TERMASUK 3 CHAPTER TERBARU
+    // MAPPING DATA TERMASUK LATEST CHAPTER
     daftarKomik = mangas.map((manga: any) => {
       let flag = "🇯🇵"; 
       const type = manga.type?.toLowerCase() || 'manga';
       if (type.includes("manhwa")) flag = "🇰🇷";
       if (type.includes("manhua")) flag = "🇨🇳";
-
-      // Ekstrak maksimal 3 chapter dari API Makota
-      let mappedChapters: any[] = [];
-      if (manga.chapters && Array.isArray(manga.chapters)) {
-        mappedChapters = manga.chapters.slice(0, 3).map((ch: any) => ({
-          name: ch.name || ch.chapter_name || ch.slug,
-          slug: ch.slug,
-          time: ch.time || ch.updated_on || "Baru"
-        }));
-      }
 
       return {
         title: manga.title,
@@ -121,7 +111,7 @@ export default async function Home({
         type: manga.type || 'Manga',
         flag: flag,
         isUp: true,
-        chapters: mappedChapters
+        latest_chapter: manga.latest_chapter || null
       };
     });
 
@@ -236,15 +226,13 @@ export default async function Home({
                 </h3>
               </div>
               
-              {/* RENDER 3 CHAPTER TERBARU */}
-              {komik.chapters && komik.chapters.length > 0 && (
+              {/* RENDER 1 CHAPTER TERBARU SESUAI DATA MAKOTA */}
+              {komik.latest_chapter && (
                 <div className="flex flex-col gap-1 mt-1">
-                  {komik.chapters.map((ch: any, cIdx: number) => (
-                    <Link prefetch={false} key={cIdx} href={`/baca/${komik.slug}/${ch.slug}`} className="flex justify-between items-center bg-[#111] hover:bg-red-900/20 text-gray-400 hover:text-gray-200 text-[10px] font-bold px-2.5 py-2 rounded-lg transition-all border border-white/5 hover:border-red-900/30">
-                      <span className="truncate pr-2">{ch.name}</span>
-                      <span className="text-gray-600 text-[9px] whitespace-nowrap">{ch.time}</span>
-                    </Link>
-                  ))}
+                  <Link prefetch={false} href={`/manga/${komik.slug}`} className="flex justify-between items-center bg-[#111] hover:bg-red-900/20 text-gray-400 hover:text-gray-200 text-[10px] font-bold px-2.5 py-2 rounded-lg transition-all border border-white/5 hover:border-red-900/30">
+                    <span className="truncate pr-2">{komik.latest_chapter}</span>
+                    <span className="text-red-500 text-[9px] font-extrabold whitespace-nowrap">Baru</span>
+                  </Link>
                 </div>
               )}
             </div>
@@ -258,7 +246,7 @@ export default async function Home({
             )}
             
             {paginationArray.map(pageNum => (
-              <Link prefetch={false} key={pageNum} href={`${baseQuery}&page=${pageNum}`} className={`w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === pageNum ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.5)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:bg-white/5'}`}>
+              <Link prefetch={false} key={pageNum} href={`${baseQuery}&page=${pageNum}`} className={`w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all ${currentPage === pageNum ? 'bg-red-900 text-white shadow-[0_0_10px_rgba(127,29,29,0.3)] border border-red-800' : 'bg-[#111] border border-white/5 text-gray-500 hover:bg-white/5'}`}>
                 {pageNum}
               </Link>
             ))}
@@ -288,7 +276,6 @@ export default async function Home({
           <span className="text-[10px] font-medium">Profile</span>
         </Link>
       </nav>
-
     </main>
   );
       }
