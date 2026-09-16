@@ -1,0 +1,16 @@
+{
+  "name": "StarDoom Comic",
+  "short_name": "SDC",
+  "description": "Platform Web Komik Ultra-Lite",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "/sdc-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
