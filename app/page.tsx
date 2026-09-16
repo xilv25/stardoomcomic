@@ -3,7 +3,6 @@ import HomeHeader from './HomeHeader';
 import DonationPopup from './DonationPopup';
 import { createClient } from '@supabase/supabase-js';
 
-// Ekstrak tipe data agar compiler Vercel (SWC) tidak bingung
 type PageProps = {
   searchParams: Promise<{ q?: string; type?: string; page?: string }>;
 };
@@ -25,9 +24,6 @@ export default async function Home(props: PageProps) {
   const MAKOTA_TOKEN = process.env.MAKOTA_API_TOKEN as string;
   const headers = { "Makota-API": MAKOTA_TOKEN };
 
-  // =====================================================================
-  // AMBIL DATA KONTROL ADMIN (PENGUMUMAN & SPONSOR)
-  // =====================================================================
   let adminAnnouncements: any[] = [];
   let adminAds: any[] = []; 
   
@@ -55,7 +51,6 @@ export default async function Home(props: PageProps) {
   }
 
   try {
-    // 1. DATA CAROUSEL & FAVORIT (Hero)
     if (!isSearching && currentPage === 1) {
       const resPopular = await fetch(`https://api.makota.asia/api/v1/manga/popular?limit=8`, {
         headers, next: { revalidate: 3600 }
@@ -67,7 +62,6 @@ export default async function Home(props: PageProps) {
       }
     }
 
-    // 2. DATA DAFTAR UTAMA
     const urlParams = new URLSearchParams();
     let mangas: any[] = [];
 
@@ -88,7 +82,6 @@ export default async function Home(props: PageProps) {
       if (activeTab !== 'semua') urlParams.append('type', activeTab);
       urlParams.append('page', currentPage.toString());
 
-      // Perbaikan: Menggunakan cache: 'no-store' agar pagination (1, 2, 3, dst) langsung merender data terbaru tanpa nyangkut di cache
       const resList = await fetch(`https://api.makota.asia/api/v1/manga/latest?${urlParams.toString()}`, { headers, cache: 'no-store' });
       const listData = await resList.json();
       if (listData.ok && listData.data?.results) {
@@ -97,7 +90,6 @@ export default async function Home(props: PageProps) {
       }
     }
 
-    // 3. FETCH DETAIL UNTUK DAPAT 3 CHAPTER
     let detailedMangas = mangas;
     if (mangas.length > 0) {
       detailedMangas = await Promise.all(mangas.map(async (m: any) => {
@@ -127,7 +119,6 @@ export default async function Home(props: PageProps) {
         });
 
         mappedChapters = sortedChapters.slice(0, 3).map((ch: any) => {
-          // Validasi rentang waktu 1 minggu (7 hari) untuk label "Baru"
           let isNew = false;
           const rawDate = ch.date || ch.created_at || ch.updated_at || ch.release_date || ch.time;
           
@@ -215,7 +206,7 @@ export default async function Home(props: PageProps) {
         </section>
       )}
 
-      {/* ================= SECTION FAVORITE MANGAS (1-3) ================= */}
+      {/* ================= SECTION FAVORITE MANGAS ================= */}
       {!isSearching && currentPage === 1 && favMangas.length > 0 && (
         <section className="px-4 max-w-xl mx-auto mt-6 relative z-10">
           <div className="flex justify-between items-end mb-3">
@@ -251,8 +242,8 @@ export default async function Home(props: PageProps) {
 
       <div className={`px-4 max-w-xl mx-auto flex flex-col gap-8 ${isSearching ? 'mt-32' : 'mt-6'}`}>
         
-        {/* ================= SECTION PENGUMUMAN ================= */}
-        {adminAnnouncements.length > 0 && (
+        {/* ================= SECTION PENGUMUMAN (Hanya Page 1 & Bukan Search) ================= */}
+        {!isSearching && currentPage === 1 && adminAnnouncements.length > 0 && (
           <section>
             <div className="flex justify-between items-end mb-3">
               <h2 className="text-lg font-bold text-gray-200">Pengumuman</h2>
@@ -291,8 +282,8 @@ export default async function Home(props: PageProps) {
           </section>
         )}
 
-        {/* ================= SECTION SPONSOR ================= */}
-        {adminAds.length > 0 && (
+        {/* ================= SECTION SPONSOR (Hanya Page 1 & Bukan Search) ================= */}
+        {!isSearching && currentPage === 1 && adminAds.length > 0 && (
           <section>
              <div className="flex justify-between items-end mb-3">
               <h2 className="text-lg font-bold text-gray-200">Sponsor</h2>
