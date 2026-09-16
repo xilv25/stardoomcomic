@@ -118,13 +118,25 @@ export default async function Home(props: PageProps) {
           return numB - numA; 
         });
 
+        // Ambil maksimal 3 chapter terbaru
         mappedChapters = sortedChapters.slice(0, 3).map((ch: any) => {
           let isNew = false;
           const rawDate = ch.date || ch.created_at || ch.updated_at || ch.release_date || ch.time;
           
-          if (rawDate) {
-            const parsedTime = new Date(rawDate).getTime();
-            if (!isNaN(parsedTime)) {
+          if (rawDate !== undefined && rawDate !== null) {
+            let parsedTime = 0;
+            if (typeof rawDate === 'number') {
+              parsedTime = rawDate < 10000000000 ? rawDate * 1000 : rawDate;
+            } else if (typeof rawDate === 'string') {
+              if (/^\d+$/.test(rawDate)) {
+                const num = parseInt(rawDate, 10);
+                parsedTime = num < 10000000000 ? num * 1000 : num;
+              } else {
+                parsedTime = new Date(rawDate).getTime();
+              }
+            }
+
+            if (!isNaN(parsedTime) && parsedTime > 0) {
               const diffDays = (Date.now() - parsedTime) / (1000 * 60 * 60 * 24);
               if (diffDays <= 7 && diffDays >= 0) {
                 isNew = true;
