@@ -23,7 +23,7 @@ const ComicImage = ({ src, index }: { src: string, index: number }) => {
   return (
     <div className={`relative w-full flex flex-col items-center justify-center m-0 p-0 ${loading || error ? 'min-h-[50vh] bg-[#050505]' : 'bg-transparent'}`}>
       
-      {/* SKELETON LOADING (Hanya muncul saat loading) */}
+      {/* SKELETON LOADING */}
       {(loading && !error) && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-8 h-8 border-4 border-white/5 border-t-red-600 rounded-full animate-spin"></div>
@@ -42,7 +42,6 @@ const ComicImage = ({ src, index }: { src: string, index: number }) => {
       )}
 
       {/* GAMBAR UTAMA */}
-      {/* Catatan: h-0 ditambahkan saat loading agar tidak mengambil tempat, align-bottom mengatasi gap HTML */}
       <img
         src={imageSrc}
         alt={`Page ${index + 1}`}
@@ -87,7 +86,7 @@ export default function ReaderUI({
   const [navVisible, setNavVisible] = useState(true);
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const [scrollSpeed, setScrollSpeed] = useState(1);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(false); // Pop-up pengatur speed
   const [isAtBottom, setIsAtBottom] = useState(false);
 
   const [commentText, setCommentText] = useState('');
@@ -100,7 +99,7 @@ export default function ReaderUI({
   const [loadingComments, setLoadingComments] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [showSpoilerHelp, setShowSpoilerHelp] = useState(false); // State Popup Bantuan Spoiler
+  const [showSpoilerHelp, setShowSpoilerHelp] = useState(false);
 
   const textareaRef = useRef<any>(null);
   const fileInputRef = useRef<any>(null);
@@ -321,10 +320,6 @@ export default function ReaderUI({
     });
   };
 
-  // ==========================================
-  // FORMAT SPOILER (DIPERBAIKI)
-  // Blur dikurangi (blur-[4px]), overflow ditutup rapi
-  // ==========================================
   const renderFormattedContent = (text: string) => {
     const spoilerRegex = new RegExp('(\\[spoiler\\][\\s\\S]*?\\[/spoiler\\])', 'g');
     const spoilerParts = text.split(spoilerRegex);
@@ -333,7 +328,7 @@ export default function ReaderUI({
       if (part.startsWith('[spoiler]') && part.endsWith('[/spoiler]')) {
         const actualText = part.replace('[spoiler]', '').replace('[/spoiler]', '');
         return (
-          <span key={`spoiler-${i}`} className="relative inline-block align-middle group cursor-pointer bg-white/10 px-2 py-0.5 rounded border border-white/10 select-none overflow-hidden mx-1">
+          <span key={`spoiler-${i}`} className="relative inline-block align-middle group cursor-pointer bg-white/10 px-2.5 py-0.5 rounded border border-white/10 select-none overflow-hidden mx-1">
             <span className="blur-[4px] group-hover:blur-none transition-all duration-300 text-gray-300 group-hover:text-white inline-block">
               {renderImages(actualText, `innerspoiler-${i}`)}
             </span>
@@ -376,7 +371,7 @@ export default function ReaderUI({
         <button onClick={scrollToBottom} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl flex items-center justify-center shadow-lg hover:bg-white/10 transition-all" title="Ke Bawah"><img src="/ic-down.jpg" alt="Down" className="w-5 h-5 mix-blend-screen opacity-80" /></button>
       </div>
 
-      {/* RENDER HALAMAN KOMIK DENGAN SISTEM ANTI GAP HITAM */}
+      {/* RENDER HALAMAN KOMIK */}
       <div 
         className="max-w-2xl mx-auto flex flex-col items-center min-h-screen cursor-pointer"
         onClick={() => { setNavVisible(!navVisible); setShowSettings(false); setOpenMenuId(null); }}
@@ -435,30 +430,26 @@ export default function ReaderUI({
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/5 relative">
               
               <div className="flex gap-2 items-center">
-                <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />i
                 
-                {/* Tombol Upload Gambar SVG */}
                 <button onClick={() => fileInputRef.current?.click()} disabled={!currentUser || uploadingImage} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-white flex items-center justify-center transition-all text-gray-400 disabled:opacity-30" title="Upload Gambar">
                   {uploadingImage ? '⏳' : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2h12a2 2 0 002-2V6z"></path></svg>}
                 </button>
                 
-                {/* Tombol Sensor Spoiler SVG */}
                 <button onClick={addSpoilerTag} disabled={!currentUser} className="w-9 h-9 rounded-lg bg-black/50 border border-white/10 hover:border-red-500/50 hover:text-white flex items-center justify-center transition-all text-gray-400 disabled:opacity-30" title="Tandai Spoiler">
                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
                 </button>
 
-                {/* Tombol Help (?) */}
                 <button onClick={() => setShowSpoilerHelp(!showSpoilerHelp)} className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-[10px] text-gray-400 hover:text-white transition-colors ml-1 font-bold">
                   ?
                 </button>
 
-                {/* Popup Penjelasan Spoiler (Diperjelas) */}
                 {showSpoilerHelp && (
                   <div className="absolute top-12 left-0 w-64 bg-black/95 backdrop-blur-xl border border-white/10 p-4 rounded-xl shadow-2xl text-[10px] text-gray-300 z-10 animate-fade-in">
                     <p className="font-bold text-white mb-2 text-xs">Cara Pakai Spoiler:</p>
                     <ol className="list-decimal pl-3 space-y-1.5 mb-2">
                       <li>Ketik komentarmu. Blok (pilih) bagian teks rahasia, lalu klik <b>ikon mata coret</b>.</li>
-                      <li><b>Atau</b> klik ikon mata coret langsung, lalu <span className="text-red-400 font-bold">hapus dan ganti</span> tulisan <code className="bg-white/10 px-1 rounded">teks spoiler</code> yang muncul di dalam kurung siku dengan bocoran ceritamu.</li>
+                      <li><b>Atau</b> klik ikon mata coret langsung, lalu <span className="text-red-400 font-bold">hapus dan ganti</span> tulisan <code className="bg-white/10 px-1 rounded">teks spoiler</code> di dalam kurung siku dengan bocoran ceritamu.</li>
                     </ol>
                     <p className="text-gray-500 italic text-[9px] mb-3">Contoh:<br/> [spoiler]Si rambut merah mati[/spoiler]</p>
                     <button onClick={() => setShowSpoilerHelp(false)} className="w-full py-2 bg-red-900/50 rounded-lg text-white font-bold hover:bg-red-900 transition-colors">Paham!</button>
@@ -572,26 +563,58 @@ export default function ReaderUI({
         </div>
       </div>
 
-      {/* FLOATING ACTION BOTTOM NAV */}
-      <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex justify-between items-end gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
-        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
-          {prevCh ? (
-            <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg"><img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" /></Link>
-          ) : <div className="w-12 h-12"></div>}
-        </div>
-        <div className="flex-1 relative flex justify-center">
-          <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-full px-5 py-2.5 flex gap-4 sm:gap-5 items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
-            <button onClick={() => setShowSettings(!showSettings)} className="hover:opacity-100 opacity-70 transition-opacity" title="Pengaturan Scroll"><img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" /></button>
-            <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll"><img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} /></button>
-            <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark"><img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" /></button>
-            <div className="w-[1px] h-5 bg-white/20"></div>
-            <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik"><img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" /></Link>
+      {/* ========================================== */}
+      {/* FLOATING BOTTOM NAV & PANEL SETTING SPEED */}
+      {/* ========================================== */}
+      <div className={`fixed bottom-6 w-full px-4 max-w-2xl left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3 transition-transform duration-500 ease-in-out ${navVisible ? 'translate-y-0' : 'translate-y-[200%]'}`}>
+        
+        {/* PANEL POP-UP PENGATURAN SPEED AUTO-SCROLL */}
+        {showSettings && (
+          <div className="w-full bg-black/90 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-fade-in mb-1">
+            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+              <span className="text-xs font-bold text-gray-200">Kecepatan Auto-Scroll</span>
+              <span className="text-xs font-bold text-red-400">{scrollSpeed}x</span>
+            </div>
+            <div className="flex gap-2">
+              {[0.5, 1, 1.5, 2, 3, 4].map((spd) => (
+                <button
+                  key={spd}
+                  onClick={() => setScrollSpeed(spd)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${scrollSpeed === spd ? 'bg-red-900 text-white border border-red-700 shadow-md' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5'}`}
+                >
+                  {spd}x
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
-          {nextCh ? (
-            <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]"><img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" /></Link>
-          ) : <div className="w-12 h-12"></div>}
+        )}
+
+        <div className="w-full flex justify-between items-end gap-3">
+          <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
+            {prevCh ? (
+              <Link href={`/baca/${komik}/${prevCh}`} className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 shadow-lg"><img src="/ic-chevron-left.jpg" alt="Prev" className="w-5 h-5 mix-blend-screen opacity-80" /></Link>
+            ) : <div className="w-12 h-12"></div>}
+          </div>
+          
+          <div className="flex-1 relative flex justify-center">
+            <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-full px-5 py-2.5 flex gap-4 sm:gap-5 items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+              {/* TOMBOL GEAR SEKARANG MEMBUKA PANEL SETTING */}
+              <button onClick={() => setShowSettings(!showSettings)} className={`transition-opacity ${showSettings ? 'opacity-100 text-red-500' : 'opacity-70 hover:opacity-100'}`} title="Pengaturan Scroll">
+                <img src="/ic-setting.jpg" alt="Setting" className="w-5 h-5 mix-blend-screen" />
+              </button>
+
+              <button onClick={() => { setIsAutoScrolling(!isAutoScrolling); setShowSettings(false); }} className="hover:opacity-100 opacity-70 transition-opacity" title="Auto Scroll"><img src="/ic-play.jpg" alt="Play" className={`w-5 h-5 mix-blend-screen transition-all ${isAutoScrolling ? 'filter sepia hue-rotate-[320deg] saturate-[500%]' : ''}`} /></button>
+              <button className="hover:opacity-100 opacity-70 transition-opacity" title="Bookmark"><img src="/ic-bookmark.jpg" alt="Bookmark" className="w-5 h-5 mix-blend-screen" /></button>
+              <div className="w-[1px] h-5 bg-white/20"></div>
+              <Link href={`/manga/${komik}`} className="hover:opacity-100 opacity-70 transition-opacity" title="Detail Komik"><img src="/ic-menu.jpg" alt="Menu" className="w-5 h-5 mix-blend-screen" /></Link>
+            </div>
+          </div>
+
+          <div className={`transition-opacity duration-100 ${isAtBottom ? 'invisible pointer-events-none select-none' : 'visible opacity-100'}`}>
+            {nextCh ? (
+              <Link href={`/baca/${komik}/${nextCh}`} className="w-12 h-12 bg-red-900/60 backdrop-blur-md border border-red-500/30 rounded-full flex items-center justify-center hover:bg-red-800/80 shadow-[0_0_15px_rgba(153,27,27,0.3)]"><img src="/ic-chevron-right.jpg" alt="Next" className="w-5 h-5 mix-blend-screen opacity-90" /></Link>
+            ) : <div className="w-12 h-12"></div>}
+          </div>
         </div>
       </div>
     </div>
