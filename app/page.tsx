@@ -88,11 +88,12 @@ export default async function Home(props: PageProps) {
       if (activeTab !== 'semua') urlParams.append('type', activeTab);
       urlParams.append('page', currentPage.toString());
 
-      const resList = await fetch(`https://api.makota.asia/api/v1/manga/latest?${urlParams.toString()}`, { headers, next: { revalidate: 60 } });
+      // Perbaikan: Menggunakan cache: 'no-store' agar pagination (1, 2, 3, dst) langsung merender data terbaru tanpa nyangkut di cache
+      const resList = await fetch(`https://api.makota.asia/api/v1/manga/latest?${urlParams.toString()}`, { headers, cache: 'no-store' });
       const listData = await resList.json();
       if (listData.ok && listData.data?.results) {
         mangas = listData.data.results;
-        totalPages = 10;
+        totalPages = listData.data.total ? Math.ceil(listData.data.total / 10) : 10;
       }
     }
 
@@ -125,11 +126,32 @@ export default async function Home(props: PageProps) {
           return numB - numA; 
         });
 
-        mappedChapters = sortedChapters.slice(0, 3).map((ch: any) => ({
-          name: ch.name,
-          slug: ch.slug,
-          time: "Baru"
-        }));
+        mappedChapters = sortedChapters.slice(0, 3).map((ch: any) => {
+          // Validasi rentang waktu 1 minggu (7 hari) untuk label "Baru"
+          let isNew = false;
+          const rawDate = ch.date || ch.created_at || ch.updated_at || ch.release_date || ch.time;
+          
+          if (rawDate) {
+            const parsedTime = new Date(rawDate).getTime();
+            if (!isNaN(parsedTime)) {
+              const diffDays = (Date.now() - parsedTime) / (1000 * 60 * 60 * 24);
+              if (diffDays <= 7 && diffDays >= 0) {
+                isNew = true;
+              }
+            } else if (typeof rawDate === 'string') {
+              const lower = rawDate.toLowerCase();
+              if (lower.includes('jam') || lower.includes('menit') || lower.includes('detik') || (lower.includes('hari') && parseInt(rawDate) <= 7)) {
+                isNew = true;
+              }
+            }
+          }
+
+          return {
+            name: ch.name,
+            slug: ch.slug,
+            time: isNew ? "Baru" : ""
+          };
+        });
       } else if (manga.latest_chapter) {
         mappedChapters = [{ name: manga.latest_chapter, slug: manga.slug, time: "Baru" }];
       }
@@ -337,7 +359,7 @@ export default async function Home(props: PageProps) {
                   {komik.chapters.map((ch: any, cIdx: number) => (
                     <Link prefetch={false} key={cIdx} href={`/baca/${komik.slug}/${ch.slug}`} className="flex justify-between items-center bg-[#111] hover:bg-red-900/20 text-gray-400 hover:text-gray-200 text-[10px] font-bold px-2.5 py-2 rounded-lg transition-all border border-white/5 hover:border-red-900/30">
                       <span className="truncate pr-2">{ch.name}</span>
-                      <span className="text-red-500 text-[9px] font-extrabold whitespace-nowrap">{ch.time}</span>
+                      {ch.time && <span className="text-red-500 text-[9px] font-extrabold whitespace-nowrap">{ch.time}</span>}
                     </Link>
                   ))}
                 </div>
